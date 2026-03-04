@@ -10,7 +10,7 @@ def build_funding_candidate(company_name: str, article_url: str, article_text: s
     """Create a candidate inferred from funding-news content."""
     keywords = extract_keywords(article_text, limit=6)
     return RawCandidate(
-        company_name=company_name,
+        company_name=company_name.strip(),
         domain=None,
         source_type=SourceType.website,
         source_url=article_url,
@@ -23,7 +23,7 @@ def build_funding_candidate(company_name: str, article_url: str, article_text: s
                 confidence=0.75,
             )
         ],
-        metadata={"keywords": ",".join(keywords)},
+        metadata={"keywords": ",".join(keywords), "source": "funding_news"},
     )
 
 

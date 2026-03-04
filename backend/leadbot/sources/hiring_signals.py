@@ -8,9 +8,10 @@ from ..utils.text import has_developer_signal
 
 def build_hiring_candidate(company_name: str, job_post_url: str, job_description: str) -> RawCandidate:
     """Create a candidate from a hiring post."""
-    confidence = 0.8 if has_developer_signal(job_description) else 0.55
+    dev_signal = has_developer_signal(job_description)
+    confidence = 0.8 if dev_signal else 0.55
     return RawCandidate(
-        company_name=company_name,
+        company_name=company_name.strip(),
         source_type=SourceType.directory,
         source_url=job_post_url,
         signals=[
@@ -22,7 +23,7 @@ def build_hiring_candidate(company_name: str, job_post_url: str, job_description
                 confidence=confidence,
             )
         ],
-        metadata={"developer_hiring": has_developer_signal(job_description)},
+        metadata={"developer_hiring": dev_signal, "source": "hiring_signals"},
     )
 
 

@@ -47,7 +47,7 @@ def _execute_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except TypeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"tool": tool_name, "result": result}
+    return {"name": tool_name, "result": result}
 
 
 mcp_app = create_mcp_app()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from ...db.queries import list_companies
@@ -15,9 +15,9 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 
 
 @router.get("/companies.csv")
-def export_companies_csv() -> StreamingResponse:
+def export_companies_csv(run_id: int | None = Query(default=None)) -> StreamingResponse:
     with get_connection() as conn:
-        companies = list_companies(conn)
+        companies = list_companies(conn, run_id=run_id)
 
     stream = io.StringIO()
     writer = csv.writer(stream)

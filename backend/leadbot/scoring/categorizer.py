@@ -9,7 +9,8 @@ from ..utils.text import has_developer_signal
 def categorize_candidate(candidate: RawCandidate) -> str:
     """Assign a broad category from candidate metadata/signals."""
     metadata_blob = " ".join(str(value) for value in candidate.metadata.values())
-    if has_developer_signal(metadata_blob):
+    signal_blob = " ".join(signal.value for signal in candidate.signals)
+    if has_developer_signal(f"{metadata_blob} {signal_blob}"):
         return "developer_tooling"
     if any(signal.value.startswith("recent_funding") for signal in candidate.signals):
         return "funded"

@@ -53,21 +53,24 @@ class RobotsPolicy:
 
     def __init__(self) -> None:
         self._parsers: dict[str, robotparser.RobotFileParser] = {}
+        self._lock = threading.Lock()
 
     def can_fetch(self, user_agent: str, url: str) -> bool:
         parsed = urlparse(url)
         if not parsed.scheme or not parsed.netloc:
             return False
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        if origin not in self._parsers:
-            parser = robotparser.RobotFileParser()
-            parser.set_url(f"{origin}/robots.txt")
-            try:
-                parser.read()
-            except OSError:
-                return True
-            self._parsers[origin] = parser
-        return self._parsers[origin].can_fetch(user_agent, url)
+        with self._lock:
+            parser = self._parsers.get(origin)
+            if parser is None:
+                parser = robotparser.RobotFileParser()
+                parser.set_url(f"{origin}/robots.txt")
+                try:
+                    parser.read()
+                except OSError:
+                    return True
+                self._parsers[origin] = parser
+        return parser.can_fetch(user_agent, url)
 
 
 class ThrottledSession:
