@@ -507,21 +507,6 @@ def search_contacts(conn: sqlite3.Connection, query: str) -> list[Contact]:
 
 
 def persist_raw_candidate(conn: sqlite3.Connection, run_id: int, candidate: RawCandidate) -> Company:
-    company = upsert_company(
-        conn,
-        Company(
-            run_id=run_id,
-            name=candidate.company_name,
-            domain=candidate.domain,
-            metadata=candidate.metadata,
-        ),
-    )
-    if company.id is None:
-        raise ValueError("Persisted company is missing an id")
+    from ..utils.dedup import upsert_candidate_company
 
-    source_id = upsert_source(conn, company.id, candidate.source_type.value, candidate.source_url)
-    for signal in candidate.signals:
-        upsert_signal(conn, signal.model_copy(update={"company_id": company.id, "source_id": source_id}))
-    for contact in candidate.contacts:
-        upsert_contact(conn, contact.model_copy(update={"company_id": company.id}))
-    return company
+    return upsert_candidate_company(conn, run_id, candidate)
