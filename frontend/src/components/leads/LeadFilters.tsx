@@ -1,9 +1,21 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import { useLeadsStore } from '@/stores/leadsStore';
 
 export function LeadFilters() {
-  const { filters, setFilters } = useLeadsStore();
+  const { filters, setFilters, fetchLeads } = useLeadsStore();
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void fetchLeads();
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [fetchLeads, filters.query, filters.minScore]);
 
   return (
     <div className="mb-4 flex gap-3">

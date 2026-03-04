@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo } from 'react';
 
 import { useLeadsStore } from '@/stores/leadsStore';
@@ -30,9 +31,17 @@ export function LeadTable() {
         </thead>
         <tbody>
           {paginatedLeads.map((lead) => (
-            <tr key={lead.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setSelectedLeadId(lead.id)}>
-              <td className="px-3 py-2">{lead.companyName}</td>
-              <td className="px-3 py-2">{lead.domain}</td>
+            <tr key={lead.id} className="border-t border-slate-100 hover:bg-slate-50">
+              <td className="px-3 py-2 font-medium">
+                <button type="button" className="text-left hover:underline" onClick={() => setSelectedLeadId(lead.id)}>
+                  {lead.companyName}
+                </button>
+              </td>
+              <td className="px-3 py-2">
+                <Link href={`/dashboard/leads/${lead.domain}`} className="hover:underline">
+                  {lead.domain}
+                </Link>
+              </td>
               <td className="px-3 py-2">
                 <ScoreBadge score={lead.score} />
               </td>

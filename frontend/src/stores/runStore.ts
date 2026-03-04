@@ -10,6 +10,7 @@ type RunState = {
   loading: boolean;
   error?: string;
   streamTimerId?: number;
+  eventSource?: EventSource;
   setActiveRunId: (id?: string) => void;
   fetchRuns: () => Promise<void>;
   triggerRun: () => Promise<void>;
@@ -29,6 +30,16 @@ function mapRun(run: RunDto): Run {
   };
 }
 
+function createLog(runId: string, message: string, level: RunLogEntry['level'] = 'info'): RunLogEntry {
+  return {
+    id: crypto.randomUUID(),
+    runId,
+    timestamp: new Date().toISOString(),
+    level,
+    message
+  };
+}
+
 export const useRunStore = create<RunState>((set, get) => ({
   runs: [],
   activeRunId: undefined,
@@ -36,6 +47,7 @@ export const useRunStore = create<RunState>((set, get) => ({
   loading: false,
   error: undefined,
   streamTimerId: undefined,
+  eventSource: undefined,
   setActiveRunId: (id) => set({ activeRunId: id }),
   fetchRuns: async () => {
     set({ loading: true, error: undefined });
@@ -48,79 +60,112 @@ export const useRunStore = create<RunState>((set, get) => ({
     }
   },
   triggerRun: async () => {
+    set({ error: undefined });
+
     try {
       const { run_id } = await createRun('queued');
       await updateRunStatus(run_id, 'running');
       await get().fetchRuns();
-      set({ activeRunId: String(run_id) });
       get().startRunLogStream(String(run_id));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to trigger run.' });
     }
   },
   startRunLogStream: (runId) => {
-    const { streamTimerId } = get();
-    if (streamTimerId) {
-      window.clearInterval(streamTimerId);
-    }
+    get().stopRunLogStream();
 
     set((state) => ({
+      activeRunId: runId,
       runLogs: {
         ...state.runLogs,
-        [runId]: [
-          ...(state.runLogs[runId] ?? []),
-          {
-            id: crypto.randomUUID(),
-            runId,
-            timestamp: new Date().toISOString(),
-            level: 'info',
-            message: `Run ${runId} stream started.`
-          }
-        ]
+        [runId]: [...(state.runLogs[runId] ?? []), createLog(runId, `Connected to run ${runId} stream.`)]
       }
     }));
 
-    const timerId = window.setInterval(async () => {
-      const runs = await getRuns();
-      const current = runs.find((run) => String(run.run_id) === runId);
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+    const streamUrl = `${apiBase}/api/runs/${runId}/stream`;
 
-      if (!current) {
-        return;
-      }
+    try {
+      const source = new EventSource(streamUrl);
 
-      const statusMessage = `Run ${runId} status: ${current.status}. Companies: ${current.companies_discovered}, Signals: ${current.signals_collected}`;
+      source.onmessage = (event) => {
+        set((state) => ({
+          runLogs: {
+            ...state.runLogs,
+            [runId]: [...(state.runLogs[runId] ?? []), createLog(runId, event.data)]
+          }
+        }));
+      };
 
+      source.onerror = () => {
+        source.close();
+
+        set((state) => ({
+          runLogs: {
+            ...state.runLogs,
+            [runId]: [
+              ...(state.runLogs[runId] ?? []),
+              createLog(runId, 'SSE unavailable; using status polling fallback.', 'warning')
+            ]
+          },
+          eventSource: undefined
+        }));
+
+        const timerId = window.setInterval(async () => {
+          const runs = await getRuns();
+          const current = runs.find((run) => String(run.run_id) === runId);
+
+          if (!current) {
+            return;
+          }
+
+          const level: RunLogEntry['level'] =
+            current.status === 'failed' ? 'error' : current.status === 'completed' ? 'success' : 'info';
+
+          set((state) => ({
+            runs: runs.map(mapRun),
+            runLogs: {
+              ...state.runLogs,
+              [runId]: [
+                ...(state.runLogs[runId] ?? []),
+                createLog(
+                  runId,
+                  `Status ${current.status}. Companies ${current.companies_discovered}, signals ${current.signals_collected}, contacts ${current.contacts_collected}.`,
+                  level
+                )
+              ]
+            }
+          }));
+
+          if (current.status === 'completed' || current.status === 'failed') {
+            get().stopRunLogStream();
+          }
+        }, 5000);
+
+        set({ streamTimerId: timerId });
+      };
+
+      set({ eventSource: source });
+    } catch {
       set((state) => ({
-        runs: runs.map(mapRun),
         runLogs: {
           ...state.runLogs,
-          [runId]: [
-            ...(state.runLogs[runId] ?? []),
-            {
-              id: crypto.randomUUID(),
-              runId,
-              timestamp: new Date().toISOString(),
-              level: current.status === 'failed' ? 'error' : current.status === 'completed' ? 'success' : 'info',
-              message: statusMessage
-            }
-          ]
+          [runId]: [...(state.runLogs[runId] ?? []), createLog(runId, 'Unable to start stream client.', 'error')]
         }
       }));
-
-      if (current.status === 'failed' || current.status === 'completed') {
-        get().stopRunLogStream();
-      }
-    }, 5000);
-
-    set({ streamTimerId: timerId, activeRunId: runId });
+    }
   },
   stopRunLogStream: () => {
-    const { streamTimerId } = get();
+    const { streamTimerId, eventSource } = get();
+
+    if (eventSource) {
+      eventSource.close();
+    }
 
     if (streamTimerId) {
       window.clearInterval(streamTimerId);
     }
 
-    set({ streamTimerId: undefined });
+    set({ streamTimerId: undefined, eventSource: undefined });
   }
 }));

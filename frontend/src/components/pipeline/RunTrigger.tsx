@@ -12,7 +12,7 @@ export function RunTrigger() {
       onClick={() => void triggerRun()}
       disabled={loading}
     >
-      Trigger Pipeline Run
+      {loading ? 'Starting...' : 'Trigger Pipeline Run'}
     </button>
   );
 }

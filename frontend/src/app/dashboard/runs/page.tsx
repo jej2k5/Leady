@@ -6,7 +6,7 @@ import { RunLog } from '@/components/pipeline/RunLog';
 import { useRunStore } from '@/stores/runStore';
 
 export default function DashboardRunsPage() {
-  const { runs, fetchRuns, setActiveRunId, startRunLogStream, stopRunLogStream } = useRunStore();
+  const { runs, fetchRuns, error, setActiveRunId, startRunLogStream, stopRunLogStream } = useRunStore();
 
   useEffect(() => {
     void fetchRuns();
@@ -18,6 +18,7 @@ export default function DashboardRunsPage() {
 
   return (
     <div className="space-y-4">
+      {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="rounded border border-slate-200 p-4">
         <h2 className="mb-2 text-sm font-semibold">Runs</h2>
         <ul className="space-y-2 text-sm">
@@ -36,6 +37,7 @@ export default function DashboardRunsPage() {
               </button>
             </li>
           ))}
+          {!runs.length && <li>No runs found.</li>}
         </ul>
       </div>
       <RunLog />

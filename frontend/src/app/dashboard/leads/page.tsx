@@ -8,7 +8,7 @@ import { LeadTable } from '@/components/leads/LeadTable';
 import { useLeadsStore } from '@/stores/leadsStore';
 
 export default function DashboardLeadsPage() {
-  const { fetchLeads, loading, error } = useLeadsStore();
+  const { loading, error, fetchLeads } = useLeadsStore();
 
   useEffect(() => {
     void fetchLeads();
