@@ -1,5 +1,6 @@
 """Tests for CLI behavior."""
 
+import importlib.util
 from pathlib import Path
 
 from leadbot.cli import main
@@ -30,3 +31,18 @@ def test_cli_create_user_and_export(tmp_path: Path, capsys) -> None:
     assert main(["export", "--output", str(output_file), "--include-unknown-stage"]) == 0
     assert output_file.exists()
     assert output_file.read_text(encoding="utf-8").startswith("rank,company_name")
+
+
+def test_cli_serve_requires_uvicorn(monkeypatch, capsys) -> None:
+    original_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name: str, package=None):  # type: ignore[no-untyped-def]
+        if name == "uvicorn":
+            return None
+        return original_find_spec(name, package)
+
+    monkeypatch.setattr(importlib.util, "find_spec", fake_find_spec)
+
+    assert main(["serve", "--host", "127.0.0.1", "--port", "8010"]) == 2
+    error_output = capsys.readouterr().err
+    assert "Missing dependency: uvicorn" in error_output
