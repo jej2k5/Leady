@@ -22,7 +22,7 @@ def test_cli_run_and_stats(capsys) -> None:
 
 
 def test_cli_create_user_and_export(tmp_path: Path, capsys) -> None:
-    assert main(["create-user", "--email", "cli@example.com", "--full-name", "CLI User"]) == 0
+    assert main(["create-user", "--email", "cli@example.com", "--password", "secret123", "--name", "CLI User", "--role", "admin"]) == 0
     user_output = capsys.readouterr().out
     assert "created user" in user_output
 

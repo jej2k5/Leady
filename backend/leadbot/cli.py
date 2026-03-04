@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import typer
+from .api.auth.authy_compat import hash_password
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
@@ -272,12 +273,27 @@ def stats() -> None:
 @app.command("create-user")
 def create_user_command(
     email: str = typer.Option(..., "--email", help="User email"),
-    full_name: str | None = typer.Option(None, "--full-name", help="Full name"),
+    password: str = typer.Option(..., "--password", help="Local login password"),
+    role: str = typer.Option("viewer", "--role", help="Role: admin|viewer"),
+    name: str | None = typer.Option(None, "--name", help="Display name"),
 ) -> None:
-    """Create a user in the backing database."""
+    """Create a local user using Authy password hashing."""
+    role_value = role.lower()
+    if role_value not in {"admin", "viewer"}:
+        raise typer.BadParameter("--role must be admin or viewer")
     with get_connection() as conn:
-        created = create_user(conn, User(email=email, full_name=full_name))
-    typer.echo(f"created user id={created.id} email={created.email}")
+        created = create_user(
+            conn,
+            User(
+                username=email,
+                email=email,
+                name=name,
+                password_hash=hash_password(password),
+                provider="local",
+                role=role_value,
+            ),
+        )
+    typer.echo(f"created user id={created.id} email={created.email} role={created.role}")
 
 
 @app.command()

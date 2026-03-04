@@ -22,8 +22,11 @@ class ApiSettings(BaseModel):
 
 class AuthSettings(BaseModel):
     provider: str = "authy"
-    api_key: str = ""
-    app_id: str = ""
+    jwt_secret: str = "change-me-in-production-minimum-32-chars"
+    jwt_ttl_seconds: int = 3600
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
 
 
 class ScrapingSettings(BaseModel):
