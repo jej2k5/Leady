@@ -2,6 +2,13 @@
 
 import { useRunStore } from '@/stores/runStore';
 
+const levelColor: Record<string, string> = {
+  info: 'text-slate-100',
+  success: 'text-green-300',
+  warning: 'text-amber-300',
+  error: 'text-red-300'
+};
+
 export function RunLog() {
   const { activeRunId, runLogs } = useRunStore();
 
@@ -16,7 +23,7 @@ export function RunLog() {
       <h3 className="mb-2 text-sm font-semibold">Run #{activeRunId} Log Stream</h3>
       <div className="max-h-64 space-y-1 overflow-auto rounded bg-slate-950 p-3 font-mono text-xs text-slate-100">
         {logs.map((log) => (
-          <p key={log.id}>
+          <p key={log.id} className={levelColor[log.level]}>
             [{new Date(log.timestamp).toLocaleTimeString()}] {log.message}
           </p>
         ))}

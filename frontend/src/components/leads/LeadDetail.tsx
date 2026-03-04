@@ -27,6 +27,8 @@ export function LeadDetail() {
         <dd>{selected.employeeCount ?? 'N/A'}</dd>
         <dt className="text-slate-500">Location</dt>
         <dd>{selected.location ?? 'N/A'}</dd>
+        <dt className="text-slate-500">Last Updated</dt>
+        <dd>{selected.updatedAt ? new Date(selected.updatedAt).toLocaleString() : 'N/A'}</dd>
       </dl>
     </div>
   );

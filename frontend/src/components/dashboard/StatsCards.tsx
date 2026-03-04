@@ -10,7 +10,7 @@ export function StatsCards({ runs, companies, completedRuns, averageScore }: Sta
     { label: 'Total Runs', value: runs },
     { label: 'Companies', value: companies },
     { label: 'Completed Runs', value: completedRuns },
-    { label: 'Avg. Score', value: averageScore }
+    { label: 'Avg. Score', value: averageScore.toFixed(1) }
   ];
 
   return (

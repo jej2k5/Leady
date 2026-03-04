@@ -1,8 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { getSession } from 'next-auth/react';
+import { useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 type AuthGuardProps = {
@@ -10,31 +10,20 @@ type AuthGuardProps = {
 };
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const [isAllowed, setIsAllowed] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const { status } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    async function validate() {
-      const session = await getSession();
-
-      if (!session) {
-        router.replace('/login');
-      } else {
-        setIsAllowed(true);
-      }
-
-      setIsLoading(false);
+    if (status === 'unauthenticated') {
+      router.replace('/login');
     }
+  }, [router, status]);
 
-    void validate();
-  }, [router]);
-
-  if (isLoading) {
+  if (status === 'loading') {
     return <p className="text-sm text-slate-600">Checking session...</p>;
   }
 
-  if (!isAllowed) {
+  if (status === 'unauthenticated') {
     return null;
   }
 

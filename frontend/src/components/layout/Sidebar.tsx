@@ -15,11 +15,11 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 border-r border-slate-200 pr-4">
+    <aside className="w-56 border-r border-slate-200 pr-4 pt-6">
       <h2 className="mb-4 text-lg font-semibold">Leady</h2>
       <nav className="flex flex-col gap-2">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
 
           return (
             <Link

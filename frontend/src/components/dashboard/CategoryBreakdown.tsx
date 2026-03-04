@@ -8,16 +8,19 @@ export function CategoryBreakdown({ leads }: { leads: Lead[] }) {
     return acc;
   }, {});
 
+  const sorted = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+
   return (
     <div className="rounded border border-slate-200 p-4">
       <h3 className="mb-2 text-sm font-semibold">Industry Breakdown</h3>
       <ul className="space-y-1 text-sm">
-        {Object.entries(breakdown).map(([industry, count]) => (
+        {sorted.slice(0, 6).map(([industry, count]) => (
           <li key={industry} className="flex justify-between">
             <span>{industry}</span>
             <span className="font-semibold">{count}</span>
           </li>
         ))}
+        {!sorted.length && <li className="text-slate-500">No categories yet.</li>}
       </ul>
     </div>
   );
