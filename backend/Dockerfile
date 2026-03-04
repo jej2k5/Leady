@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.11-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /build
+
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --upgrade pip && pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+
+COPY backend /build/backend
+RUN pip wheel --no-cache-dir --wheel-dir /wheels /build/backend
+
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN mkdir -p /app/data /app/output /app/logs
+
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+EXPOSE 8000
+
+CMD ["python", "-m", "leadbot", "serve"]
