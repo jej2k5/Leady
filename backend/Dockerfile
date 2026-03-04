@@ -12,8 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /
 RUN pip install --upgrade pip && pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 COPY backend /build/backend
-# backend/pyproject.toml declares readme = "../README.md"
-COPY README.md /build/README.md
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels /build/backend
 
 FROM python:3.11-slim AS runtime
