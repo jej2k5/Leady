@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
+
+import { AuthGuard } from './AuthGuard';
+import { Header } from './Header';
+import { Sidebar } from './Sidebar';
 
 type DashboardShellProps = {
   children: ReactNode;
@@ -7,15 +10,14 @@ type DashboardShellProps = {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   return (
-    <div>
-      <aside>
-        <nav>
-          <Link href="/dashboard">Overview</Link> | <Link href="/dashboard/leads">Leads</Link> |{' '}
-          <Link href="/dashboard/runs">Runs</Link> | <Link href="/dashboard/pipeline">Pipeline</Link> |{' '}
-          <Link href="/dashboard/settings">Settings</Link>
-        </nav>
-      </aside>
-      <section>{children}</section>
-    </div>
+    <AuthGuard>
+      <div className="flex min-h-screen gap-6">
+        <Sidebar />
+        <section className="flex-1">
+          <Header />
+          {children}
+        </section>
+      </div>
+    </AuthGuard>
   );
 }

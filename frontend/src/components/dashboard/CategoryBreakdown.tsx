@@ -1,0 +1,24 @@
+import type { Lead } from '@/types';
+
+export function CategoryBreakdown({ leads }: { leads: Lead[] }) {
+  const breakdown = leads.reduce<Record<string, number>>((acc, lead) => {
+    const key = lead.industry ?? 'Uncategorized';
+    acc[key] = (acc[key] ?? 0) + 1;
+
+    return acc;
+  }, {});
+
+  return (
+    <div className="rounded border border-slate-200 p-4">
+      <h3 className="mb-2 text-sm font-semibold">Industry Breakdown</h3>
+      <ul className="space-y-1 text-sm">
+        {Object.entries(breakdown).map(([industry, count]) => (
+          <li key={industry} className="flex justify-between">
+            <span>{industry}</span>
+            <span className="font-semibold">{count}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
