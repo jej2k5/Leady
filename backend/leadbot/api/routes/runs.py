@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from ...db.models import RunStatus, RunSummary
 from ...db.queries import create_run, list_runs, update_run_status
 from ...db.session import get_connection
-from ..auth.authy_setup import AuthUser
 from ..dependencies import require_auth
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -31,10 +30,10 @@ def get_runs() -> list[RunSummary]:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_run_route(
     payload: CreateRunRequest,
-    current_user: AuthUser = Depends(require_auth),
+    current_user: dict = Depends(require_auth),
 ) -> dict[str, int]:
     with get_connection() as conn:
-        run_id = create_run(conn, user_id=current_user.id, status=payload.status)
+        run_id = create_run(conn, user_id=int(current_user.get("sub")) if current_user.get("sub") else None, status=payload.status)
     return {"run_id": run_id}
 
 

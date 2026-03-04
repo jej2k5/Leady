@@ -12,10 +12,15 @@ SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
         email TEXT NOT NULL UNIQUE,
-        full_name TEXT,
+        name TEXT,
+        password_hash TEXT,
+        provider TEXT NOT NULL DEFAULT 'local',
+        google_sub TEXT UNIQUE,
+        role TEXT NOT NULL DEFAULT 'viewer',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        last_login_at TEXT
     )
     """,
     """
@@ -109,6 +114,20 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON")
     for statement in SCHEMA_STATEMENTS:
         conn.execute(statement)
+    # Lightweight migrations for pre-existing DBs
+    user_columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    migrations = {
+        "username": "ALTER TABLE users ADD COLUMN username TEXT",
+        "name": "ALTER TABLE users ADD COLUMN name TEXT",
+        "password_hash": "ALTER TABLE users ADD COLUMN password_hash TEXT",
+        "provider": "ALTER TABLE users ADD COLUMN provider TEXT NOT NULL DEFAULT 'local'",
+        "google_sub": "ALTER TABLE users ADD COLUMN google_sub TEXT",
+        "role": "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'viewer'",
+        "last_login_at": "ALTER TABLE users ADD COLUMN last_login_at TEXT",
+    }
+    for column, statement in migrations.items():
+        if column not in user_columns:
+            conn.execute(statement)
     for statement in INDEX_STATEMENTS:
         conn.execute(statement)
     conn.commit()
@@ -138,10 +157,20 @@ def create_user(conn: sqlite3.Connection, user: User) -> User:
     now = utcnow()
     cursor = conn.execute(
         """
-        INSERT INTO users (email, full_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO users (username, email, name, password_hash, provider, google_sub, role, created_at, last_login_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (str(user.email), user.full_name, now, now),
+        (
+            user.username,
+            str(user.email),
+            user.name,
+            user.password_hash,
+            user.provider,
+            user.google_sub,
+            user.role,
+            now,
+            user.last_login_at.isoformat() if user.last_login_at else None,
+        ),
     )
     conn.commit()
     return get_user(conn, int(cursor.lastrowid))
@@ -154,6 +183,41 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> User:
     return _row_to_user(row)
 
 
+def get_user_by_username(conn: sqlite3.Connection, username: str) -> dict[str, object] | None:
+    row = conn.execute(
+        "SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)",
+        (username, username),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def upsert_oauth_user(
+    conn: sqlite3.Connection,
+    *,
+    email: str,
+    name: str | None,
+    provider: str,
+    google_sub: str | None = None,
+) -> User:
+    now = utcnow()
+    conn.execute(
+        """
+        INSERT INTO users (username, email, name, provider, google_sub, role, created_at, last_login_at)
+        VALUES (?, ?, ?, ?, ?, 'viewer', ?, ?)
+        ON CONFLICT(email) DO UPDATE SET
+            name = excluded.name,
+            provider = excluded.provider,
+            google_sub = COALESCE(excluded.google_sub, users.google_sub),
+            last_login_at = excluded.last_login_at
+        """,
+        (email, email, name, provider, google_sub, now, now),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    assert row is not None
+    return _row_to_user(row)
+
+
 def list_users(conn: sqlite3.Connection) -> list[User]:
     rows = conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()
     return [_row_to_user(row) for row in rows]
@@ -163,13 +227,28 @@ def upsert_user(conn: sqlite3.Connection, user: User) -> User:
     now = utcnow()
     conn.execute(
         """
-        INSERT INTO users (email, full_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO users (username, email, name, password_hash, provider, google_sub, role, created_at, last_login_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(email) DO UPDATE SET
-            full_name = excluded.full_name,
-            updated_at = excluded.updated_at
+            username = COALESCE(excluded.username, users.username),
+            name = excluded.name,
+            password_hash = COALESCE(excluded.password_hash, users.password_hash),
+            provider = excluded.provider,
+            google_sub = COALESCE(excluded.google_sub, users.google_sub),
+            role = COALESCE(excluded.role, users.role),
+            last_login_at = excluded.last_login_at
         """,
-        (str(user.email), user.full_name, now, now),
+        (
+            user.username,
+            str(user.email),
+            user.name,
+            user.password_hash,
+            user.provider,
+            user.google_sub,
+            user.role,
+            now,
+            user.last_login_at.isoformat() if user.last_login_at else now,
+        ),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM users WHERE email = ?", (str(user.email),)).fetchone()
@@ -178,6 +257,7 @@ def upsert_user(conn: sqlite3.Connection, user: User) -> User:
 
 
 def create_run(conn: sqlite3.Connection, user_id: int | None, status: RunStatus = RunStatus.queued) -> int:
+
     now = utcnow()
     started_at = now if status == RunStatus.running else None
     cursor = conn.execute(
