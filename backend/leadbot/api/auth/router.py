@@ -24,6 +24,7 @@ class GoogleLoginRequest(BaseModel):
 
 
 @router.post("/login", response_model=LoginResult)
+@router.post("/token", response_model=LoginResult)
 def login(payload: LocalLoginRequest) -> LoginResult:
     manager = get_auth_manager()
     try:
@@ -51,13 +52,17 @@ def google_login(payload: GoogleLoginRequest) -> LoginResult:
 
 @router.get("/google/callback", response_model=LoginResult)
 def google_callback(
-    token: str = Query(..., alias="token"),
+    token: str | None = Query(default=None, alias="token"),
+    code: str | None = Query(default=None, alias="code"),
     email: EmailStr | None = Query(default=None),
     name: str | None = Query(default=None),
 ) -> LoginResult:
     manager = get_auth_manager()
+    resolved_token = token or code
+    if not resolved_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing token or code")
     try:
-        return manager.login_google(google_token=token, email=str(email) if email else None, full_name=name)
+        return manager.login_google(google_token=resolved_token, email=str(email) if email else None, full_name=name)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 

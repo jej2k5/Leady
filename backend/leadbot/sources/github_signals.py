@@ -7,9 +7,10 @@ from ..db.models import RawCandidate, Signal, SignalType, SourceType
 
 def build_github_candidate(company_name: str, repo_url: str, stars: int) -> RawCandidate:
     """Create candidate from GitHub repository activity."""
-    confidence = min(0.9, 0.4 + min(stars, 500) / 1000)
+    bounded_stars = max(stars, 0)
+    confidence = min(0.9, 0.4 + min(bounded_stars, 500) / 1000)
     return RawCandidate(
-        company_name=company_name,
+        company_name=company_name.strip(),
         source_type=SourceType.api,
         source_url=repo_url,
         signals=[
@@ -21,7 +22,7 @@ def build_github_candidate(company_name: str, repo_url: str, stars: int) -> RawC
                 confidence=confidence,
             )
         ],
-        metadata={"github_stars": stars},
+        metadata={"github_stars": bounded_stars, "source": "github_signals"},
     )
 
 

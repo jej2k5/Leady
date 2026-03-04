@@ -19,7 +19,7 @@ class MCPApiKeyMiddleware(BaseHTTPMiddleware):
         if not configured_key:
             return await call_next(request)
 
-        provided_key = request.headers.get("x-api-key", "").strip()
+        provided_key = request.headers.get("x-api-key", "").strip() or request.headers.get("x-mcp-api-key", "").strip()
         authorization = request.headers.get("authorization", "").strip()
         if authorization.lower().startswith("bearer "):
             provided_key = authorization[7:].strip() or provided_key

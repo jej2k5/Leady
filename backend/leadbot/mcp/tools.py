@@ -22,11 +22,11 @@ from ..db.session import get_connection
 ToolHandler = Callable[[dict[str, Any]], dict[str, Any]]
 
 
-TOOL_SCHEMAS: list[dict[str, Any]] = [
-    {
-        "name": "leady.search_companies",
-        "description": "Search companies by name, domain, or industry.",
-        "input_schema": {
+_TOOL_DEFS: list[tuple[str, str, dict[str, Any]]] = [
+    (
+        "search_companies",
+        "Search companies by name, domain, or industry.",
+        {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "minLength": 1},
@@ -35,21 +35,21 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["query"],
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "get_company",
-        "description": "Fetch a company by ID.",
-        "input_schema": {
+    ),
+    (
+        "get_company",
+        "Fetch a company by ID.",
+        {
             "type": "object",
             "properties": {"company_id": {"type": "integer", "minimum": 1}},
             "required": ["company_id"],
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "get_top_leads",
-        "description": "Get top scored companies.",
-        "input_schema": {
+    ),
+    (
+        "get_top_leads",
+        "Get top scored companies.",
+        {
             "type": "object",
             "properties": {
                 "limit": {"type": "integer", "minimum": 1, "default": 10},
@@ -57,40 +57,40 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "get_signals",
-        "description": "List signals associated with a company.",
-        "input_schema": {
+    ),
+    (
+        "get_signals",
+        "List signals associated with a company.",
+        {
             "type": "object",
             "properties": {"company_id": {"type": "integer", "minimum": 1}},
             "required": ["company_id"],
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "get_contacts",
-        "description": "List contacts associated with a company.",
-        "input_schema": {
+    ),
+    (
+        "get_contacts",
+        "List contacts associated with a company.",
+        {
             "type": "object",
             "properties": {"company_id": {"type": "integer", "minimum": 1}},
             "required": ["company_id"],
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "get_run_stats",
-        "description": "Fetch run summary stats.",
-        "input_schema": {
+    ),
+    (
+        "get_run_stats",
+        "Fetch run summary stats.",
+        {
             "type": "object",
             "properties": {"run_id": {"type": "integer", "minimum": 1}},
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "export_leads",
-        "description": "Export leads as CSV payload.",
-        "input_schema": {
+    ),
+    (
+        "export_leads",
+        "Export leads as CSV payload.",
+        {
             "type": "object",
             "properties": {
                 "run_id": {"type": "integer", "minimum": 1},
@@ -99,11 +99,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "trigger_run",
-        "description": "Create a new lead run record.",
-        "input_schema": {
+    ),
+    (
+        "trigger_run",
+        "Create a new lead run record.",
+        {
             "type": "object",
             "properties": {
                 "user_id": {"type": "integer", "minimum": 1},
@@ -111,8 +111,13 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
             "additionalProperties": False,
         },
-    },
+    ),
 ]
+
+TOOL_SCHEMAS: list[dict[str, Any]] = []
+for short_name, description, input_schema in _TOOL_DEFS:
+    full_name = f"leady.{short_name}"
+    TOOL_SCHEMAS.append({"name": full_name, "description": description, "input_schema": input_schema, "inputSchema": input_schema})
 
 
 def _serialize_company(company: Company) -> dict[str, Any]:
@@ -219,17 +224,25 @@ def handle_trigger_run(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOL_HANDLERS: dict[str, ToolHandler] = {
+    "search_companies": handle_search_companies,
     "leady.search_companies": handle_search_companies,
     "get_company": handle_get_company,
+    "leady.get_company": handle_get_company,
     "get_top_leads": handle_get_top_leads,
+    "leady.get_top_leads": handle_get_top_leads,
     "get_signals": handle_get_signals,
+    "leady.get_signals": handle_get_signals,
     "get_contacts": handle_get_contacts,
+    "leady.get_contacts": handle_get_contacts,
     "get_run_stats": handle_get_run_stats,
+    "leady.get_run_stats": handle_get_run_stats,
     "export_leads": handle_export_leads,
+    "leady.export_leads": handle_export_leads,
     "trigger_run": handle_trigger_run,
+    "leady.trigger_run": handle_trigger_run,
 }
 
-WRITE_TOOLS = {"trigger_run"}
+WRITE_TOOLS = {"trigger_run", "leady.trigger_run"}
 
 
 def execute_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:

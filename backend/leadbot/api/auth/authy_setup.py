@@ -61,7 +61,7 @@ class AuthManager:
         padded = body + "=" * (-len(body) % 4)
         try:
             payload = json.loads(base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8"))
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             return None
         if not isinstance(payload, dict):
             return None

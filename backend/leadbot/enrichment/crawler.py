@@ -15,4 +15,5 @@ def fetch_page_text(url: str, session: ThrottledSession | None = None) -> str:
     html = response.text
     no_script = re.sub(r"<script[\s\S]*?</script>", " ", html, flags=re.IGNORECASE)
     no_style = re.sub(r"<style[\s\S]*?</style>", " ", no_script, flags=re.IGNORECASE)
-    return clean_text(no_style)
+    no_noscript = re.sub(r"<noscript[\s\S]*?</noscript>", " ", no_style, flags=re.IGNORECASE)
+    return clean_text(no_noscript)
