@@ -103,6 +103,19 @@ docker compose run --rm leady-api python -m leadbot export --type outreach --out
 ```bash
 # Follow logs
 docker compose logs -f
+### Useful Docker Compose commands
+
+```bash
+# Start services in detached mode
+docker compose up -d
+
+# Rebuild and restart services
+docker compose up --build -d
+
+# Follow logs for all services
+docker compose logs -f
+
+# View logs for a specific service
 docker compose logs -f leady-api
 docker compose logs -f leady-ui
 
