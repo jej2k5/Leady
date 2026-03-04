@@ -26,7 +26,11 @@ from .db.queries import (
 )
 from .db.session import get_connection
 from .enrichment.pipeline import enrich_candidate
-from .exports.csv_export import OUTREACH_QUEUE_HEADERS, build_outreach_queue_csv, build_raw_candidates_csv
+from .exports.csv_export import (
+    OUTREACH_QUEUE_HEADERS,
+    build_outreach_queue_csv,
+    build_raw_candidates_csv,
+)
 from .exports.google_sheets import append_rows_to_google_sheets
 from .scoring.engine import evaluate_candidate
 from .sources.funding_news import fetch_candidates as fetch_funding_candidates

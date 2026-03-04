@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from leadbot.db.models import Contact, ContactType, RawCandidate, Signal, SignalType, SourceType
 from leadbot.db.queries import list_contacts_for_company, list_signals_for_company
-from leadbot.utils.dedup import normalize_domain, upsert_candidate_company
 from leadbot.db.session import get_connection
+from leadbot.utils.dedup import normalize_domain, upsert_candidate_company
 
 
 def test_normalize_domain_handles_urls_and_www() -> None:

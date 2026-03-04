@@ -5,11 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 
-from ..auth.authy_setup import AuthUser
-from ..dependencies import require_auth
 from ...db.models import RunStatus, RunSummary
 from ...db.queries import create_run, list_runs, update_run_status
 from ...db.session import get_connection
+from ..auth.authy_setup import AuthUser
+from ..dependencies import require_auth
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 

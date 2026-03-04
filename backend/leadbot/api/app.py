@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from ..mcp.server import mcp_app
 from .auth.router import router as auth_router
 from .dependencies import require_auth
 from .routes.companies import router as companies_router
@@ -14,7 +15,6 @@ from .routes.pipeline import router as pipeline_router
 from .routes.runs import router as runs_router
 from .routes.signals import router as signals_router
 from .routes.stats import router as stats_router
-from ..mcp.server import mcp_app
 
 app = FastAPI(title="Leady API", version="0.1.0")
 

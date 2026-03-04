@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 import threading
 import time
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from urllib import robotparser
 from urllib.parse import urlparse
 
