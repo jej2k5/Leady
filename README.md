@@ -50,6 +50,68 @@ Leady is a mono-repo for discovering, enriching, scoring, and exporting outbound
    - API: `http://localhost:8000`
    - UI: `http://localhost:3000`
 
+## Using the bot (CLI)
+
+### Standalone (without Docker Compose)
+
+Run from the repository root:
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+# See all available commands
+python -m leadbot --help
+
+# Run discovery -> enrichment -> scoring -> export
+python -m leadbot run --days 30 --sources funding,hiring,github
+
+# Inspect run/company stats
+python -m leadbot stats
+
+# Export outreach CSV manually
+python -m leadbot export --type outreach --output ./output/outreach_queue.csv
+```
+
+### With Docker Compose
+
+Run from the repository root:
+
+```bash
+# Start API + UI
+docker compose up --build -d
+
+# Run one-off bot commands inside the API container
+docker compose run --rm leady-api python -m leadbot --help
+docker compose run --rm leady-api python -m leadbot run --days 30 --sources funding,hiring,github
+docker compose run --rm leady-api python -m leadbot stats
+
+# Optional: manual CSV export from container
+docker compose run --rm leady-api python -m leadbot export --type outreach --output /app/output/outreach_queue.csv
+
+# Follow logs while services are running
+docker compose logs -f leady-api
+docker compose logs -f leady-ui
+```
+
+### Useful Docker Compose lifecycle commands
+
+```bash
+# List running services and status
+docker compose ps
+
+# Stop services
+docker compose stop
+
+# Stop and remove containers, networks, and anonymous volumes
+docker compose down
+
+# Stop and remove everything including named volumes (full reset)
+docker compose down -v
+```
+
 ## Authentication flows
 
 ### API local login
