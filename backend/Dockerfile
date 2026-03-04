@@ -8,6 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /build
 
 COPY backend/requirements.txt ./requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 RUN pip install --upgrade pip && pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 COPY backend /build/backend
