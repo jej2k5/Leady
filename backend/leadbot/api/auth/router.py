@@ -1,77 +1,103 @@
-"""Authentication API routes."""
+"""Authentication API routes using Authy."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr
+from typing import Any
+import inspect
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+
+from ...db import queries
+from ...db.session import get_connection
 from ..dependencies import require_auth
-from .authy_setup import AuthUser, LoginResult, get_auth_manager
+from .authy_setup import auth_manager
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 class LocalLoginRequest(BaseModel):
-    email: EmailStr
+    username: str
     password: str
-    full_name: str | None = None
 
 
-class GoogleLoginRequest(BaseModel):
-    google_token: str
-    email: EmailStr | None = None
-    full_name: str | None = None
+async def _authenticate(provider: str, data: dict[str, Any]) -> dict[str, Any]:
+    result = auth_manager.authenticate(provider, data)
+    if inspect.isawaitable(result):
+        result = await result
+    return dict(result)
 
 
-@router.post("/login", response_model=LoginResult)
-@router.post("/token", response_model=LoginResult)
-def login(payload: LocalLoginRequest) -> LoginResult:
-    manager = get_auth_manager()
+@router.post("/login")
+async def login(payload: LocalLoginRequest) -> dict[str, Any]:
     try:
-        return manager.login_local(
-            email=str(payload.email),
-            password=payload.password,
-            full_name=payload.full_name,
+        result = await _authenticate(
+            "local",
+            {
+                "username": payload.username,
+                "password": payload.password,
+            },
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    token = str(result.get("token", ""))
+    user = result.get("user") or {}
+    return {"token": token, "user": user}
 
 
-@router.post("/google", response_model=LoginResult)
-def google_login(payload: GoogleLoginRequest) -> LoginResult:
-    manager = get_auth_manager()
+@router.get("/google")
+async def google_auth_url() -> dict[str, str]:
     try:
-        return manager.login_google(
-            google_token=payload.google_token,
-            email=str(payload.email) if payload.email else None,
-            full_name=payload.full_name,
+        result = await _authenticate("google", {"action": "get_auth_url"})
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    auth_url = result.get("auth_url")
+    if not auth_url:
+        raise HTTPException(status_code=400, detail="Google auth URL unavailable")
+    return {"auth_url": str(auth_url)}
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    code_verifier: str = Query(...),
+) -> dict[str, Any]:
+    try:
+        result = await _authenticate(
+            "google",
+            {
+                "action": "callback",
+                "code": code,
+                "state": state,
+                "code_verifier": code_verifier,
+            },
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    token = str(result.get("token", ""))
+    user = result.get("user") or {}
+    email = user.get("email")
+    if email:
+        with get_connection() as conn:
+            queries.upsert_oauth_user(
+                conn,
+                email=str(email),
+                name=user.get("name"),
+                provider="google",
+                google_sub=user.get("sub"),
+            )
+
+    return {"token": token, "user": user}
 
 
-@router.get("/google/callback", response_model=LoginResult)
-def google_callback(
-    token: str | None = Query(default=None, alias="token"),
-    code: str | None = Query(default=None, alias="code"),
-    email: EmailStr | None = Query(default=None),
-    name: str | None = Query(default=None),
-) -> LoginResult:
-    manager = get_auth_manager()
-    resolved_token = token or code
-    if not resolved_token:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing token or code")
-    try:
-        return manager.login_google(google_token=resolved_token, email=str(email) if email else None, full_name=name)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
-
-
-@router.get("/me", response_model=AuthUser)
-def me(current_user: AuthUser = Depends(require_auth)) -> AuthUser:
-    return current_user
+@router.get("/me")
+def me(payload: dict = Depends(require_auth)) -> dict[str, Any]:
+    return payload
 
 
 @router.post("/logout")
-def logout(_: AuthUser = Depends(require_auth)) -> dict[str, str]:
-    return {"detail": "Logged out"}
+def logout(_: dict = Depends(require_auth)) -> dict[str, bool]:
+    return {"success": True}

@@ -39,10 +39,15 @@ class User(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int | None = None
+    username: str | None = None
     email: EmailStr
-    full_name: str | None = None
+    name: str | None = None
+    password_hash: str | None = None
+    provider: str = "local"
+    google_sub: str | None = None
+    role: str = "viewer"
     created_at: datetime | None = None
-    updated_at: datetime | None = None
+    last_login_at: datetime | None = None
 
 
 class Company(BaseModel):

@@ -5,9 +5,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     volumes:
@@ -31,8 +30,8 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    env_file:
+      - .env
     ports:
       - "3000:3000"
     depends_on:
