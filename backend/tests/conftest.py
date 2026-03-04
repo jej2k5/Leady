@@ -26,6 +26,7 @@ def client():
     pytest.importorskip("fastapi")
     pytest.importorskip("starlette")
     from fastapi.testclient import TestClient
+
     from leadbot.api.app import app
 
     return TestClient(app)

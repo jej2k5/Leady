@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Protocol
+from collections.abc import Iterable
+from typing import Protocol
 
 from ..db.models import RawCandidate
 
@@ -12,6 +13,7 @@ class SourceAdapter(Protocol):
 
     def fetch_candidates(self) -> list[RawCandidate]:
         """Return discovered raw candidates."""
+        ...
 
 
 def gather_candidates(adapters: Iterable[SourceAdapter]) -> list[RawCandidate]:

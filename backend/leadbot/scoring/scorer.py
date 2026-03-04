@@ -5,7 +5,6 @@ from __future__ import annotations
 from ..config import get_settings
 from ..db.models import RawCandidate, SignalType
 
-
 _SIGNAL_WEIGHTS = {
     SignalType.funding: 30.0,
     SignalType.hiring: 25.0,
