@@ -7,5 +7,6 @@ idna>=3.7,<4.0
 certifi>=2024.7.4
 pydantic>=2.8,<3.0
 pydantic-settings>=2.4,<3.0
+email-validator>=2.2,<3.0
 
 authy @ git+https://github.com/jej2k5/Authy.git@main#subdirectory=python
