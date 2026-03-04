@@ -1,20 +1,40 @@
 version: "3.9"
 
 services:
-  backend:
-    image: python:3.12-slim
-    working_dir: /app/backend
-    volumes:
-      - .:/app
-    command: python -m leadbot
+  leady-api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8000:8000"
-
-  frontend:
-    image: node:20-alpine
-    working_dir: /app/frontend
     volumes:
-      - .:/app
-    command: sh -c "npm install && npm run dev"
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./logs:/app/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/stats/overview')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  leady-ui:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
+    depends_on:
+      leady-api:
+        condition: service_healthy
