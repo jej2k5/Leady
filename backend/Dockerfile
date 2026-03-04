@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /
 RUN pip install --upgrade pip && pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 COPY backend /build/backend
-RUN pip wheel --no-cache-dir --wheel-dir /wheels /build/backend
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels /build/backend
 
 FROM python:3.11-slim AS runtime
 
