@@ -4,24 +4,34 @@ export type PipelineStage = 'discovery' | 'enrichment' | 'scoring' | 'outreach' 
 
 export interface Lead {
   id: string;
+  runId?: string;
   domain: string;
   companyName: string;
-  contactName?: string;
-  contactEmail?: string;
+  industry?: string;
+  employeeCount?: number;
+  location?: string;
   score?: number;
   status: LeadStatus;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Run {
   id: string;
-  source: string;
   status: 'queued' | 'running' | 'completed' | 'failed';
   startedAt?: string;
   finishedAt?: string;
   totalCandidates?: number;
-  qualifiedLeads?: number;
+  signalsCollected?: number;
+  contactsCollected?: number;
+}
+
+export interface RunLogEntry {
+  id: string;
+  runId: string;
+  timestamp: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  message: string;
 }
 
 export interface PipelineMetrics {
