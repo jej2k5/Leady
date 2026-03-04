@@ -45,7 +45,10 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-q --cov=leadbot --cov-report=term-missing"
+addopts = '-q -m "not network" --cov=leadbot --cov-report=term-missing'
+markers = [
+  "network: tests that require live network access (opt-in)",
+]
 testpaths = ["tests"]
 
 [tool.coverage.run]
