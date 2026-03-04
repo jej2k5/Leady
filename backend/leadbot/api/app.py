@@ -14,6 +14,7 @@ from .routes.pipeline import router as pipeline_router
 from .routes.runs import router as runs_router
 from .routes.signals import router as signals_router
 from .routes.stats import router as stats_router
+from ..mcp.server import mcp_app
 
 app = FastAPI(title="Leady API", version="0.1.0")
 
@@ -33,6 +34,8 @@ app.include_router(contacts_router, dependencies=[Depends(require_auth)])
 app.include_router(runs_router, dependencies=[Depends(require_auth)])
 app.include_router(pipeline_router, dependencies=[Depends(require_auth)])
 app.include_router(export_router, dependencies=[Depends(require_auth)])
+
+app.mount("/mcp", mcp_app)
 
 
 @app.get("/healthz")
