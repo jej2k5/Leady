@@ -50,6 +50,35 @@ Leady is a mono-repo for discovering, enriching, scoring, and exporting outbound
    - API: `http://localhost:8000`
    - UI: `http://localhost:3000`
 
+### Useful Docker Compose commands
+
+```bash
+# Start services in detached mode
+docker compose up -d
+
+# Rebuild and restart services
+docker compose up --build -d
+
+# Follow logs for all services
+docker compose logs -f
+
+# View logs for a specific service
+docker compose logs -f leady-api
+docker compose logs -f leady-ui
+
+# List running services and status
+docker compose ps
+
+# Stop services
+docker compose stop
+
+# Stop and remove containers, networks, and anonymous volumes
+docker compose down
+
+# Stop and remove everything including named volumes (full reset)
+docker compose down -v
+```
+
 ## Authentication flows
 
 ### API local login
