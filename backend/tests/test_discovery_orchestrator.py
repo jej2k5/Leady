@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from leadbot.discovery.orchestrator import discover_seed_data
+from leadbot.db.queries import list_discovery_candidates
+from leadbot.db.session import get_connection
+from leadbot.discovery.orchestrator import discover_seed_data, emit_top_unseeded_source_seed_data
 
 
 def test_discover_seed_data_returns_pipeline_shape() -> None:
@@ -45,3 +47,50 @@ def test_discover_seed_data_returns_pipeline_shape() -> None:
     assert data["hiring"][0]["description"] == "Hiring backend engineer"
     assert data["github"][0]["stars"] == 17
     assert data["github"][0]["repo_count"] == 4
+
+    with get_connection() as conn:
+        persisted = list_discovery_candidates(conn, status="unseeded")
+
+    assert len(persisted) >= 3
+
+
+def test_emit_top_unseeded_source_seed_data_groups_and_marks_seeded() -> None:
+    discover_seed_data(
+        {
+            "funding": {
+                "rows": [
+                    {
+                        "company": "Delta",
+                        "link": "https://news.example.com/delta",
+                        "summary": "Delta raised",
+                    }
+                ]
+            },
+            "hiring": {
+                "rows": [
+                    {
+                        "company": "Delta",
+                        "link": "https://jobs.example.com/delta",
+                        "text": "Hiring data engineer",
+                    }
+                ]
+            },
+            "github": {
+                "rows": [
+                    {
+                        "org_name": "Delta",
+                        "repo_url": "https://github.com/delta/core",
+                        "stars": 50,
+                    }
+                ]
+            },
+        }
+    )
+
+    selected = emit_top_unseeded_source_seed_data(limit_per_source=1)
+
+    assert set(selected.keys()) == {"funding", "hiring", "github"}
+    assert len(selected["funding"]) == 1
+    assert len(selected["hiring"]) == 1
+    assert len(selected["github"]) == 1
+    assert selected["github"][0]["stars"] >= 0
