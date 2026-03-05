@@ -1,3 +1,4 @@
+import { getSession } from 'next-auth/react';
 import { create } from 'zustand';
 
 import { getRuns, startPipelineRun, type RunDto } from '@/lib/api';
@@ -14,7 +15,7 @@ type RunState = {
   setActiveRunId: (id?: string) => void;
   fetchRuns: () => Promise<void>;
   triggerRun: () => Promise<void>;
-  startRunLogStream: (runId: string) => void;
+  startRunLogStream: (runId: string) => Promise<void>;
   stopRunLogStream: () => void;
 };
 
@@ -65,12 +66,12 @@ export const useRunStore = create<RunState>((set, get) => ({
     try {
       const { run_id } = await startPipelineRun();
       await get().fetchRuns();
-      get().startRunLogStream(String(run_id));
+      void get().startRunLogStream(String(run_id));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to start pipeline run.' });
     }
   },
-  startRunLogStream: (runId) => {
+  startRunLogStream: async (runId) => {
     get().stopRunLogStream();
 
     set((state) => ({
@@ -82,7 +83,11 @@ export const useRunStore = create<RunState>((set, get) => ({
     }));
 
     const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
-    const streamUrl = `${apiBase}/api/runs/${runId}/stream`;
+    const session = await getSession();
+    const token = session?.accessToken;
+    const streamUrl = token
+      ? `${apiBase}/api/runs/${runId}/stream?access_token=${encodeURIComponent(token)}`
+      : `${apiBase}/api/runs/${runId}/stream`;
 
     try {
       const source = new EventSource(streamUrl);

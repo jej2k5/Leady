@@ -33,7 +33,7 @@ export default function DashboardPipelinePage() {
                 className="rounded border border-slate-300 px-2 py-1 text-xs"
                 onClick={() => {
                   setActiveRunId(run.id);
-                  startRunLogStream(run.id);
+                  void startRunLogStream(run.id);
                 }}
               >
                 View Logs

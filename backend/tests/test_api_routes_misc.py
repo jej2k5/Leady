@@ -89,3 +89,14 @@ def test_run_stream_route_returns_event_stream(client, auth_headers) -> None:
         first_line = next(response.iter_lines())
 
     assert first_line.startswith('data: Status completed.')
+
+
+def test_run_stream_supports_access_token_query_param(client, auth_headers) -> None:
+    created = client.post('/api/runs', headers=auth_headers, json={'status': 'completed'})
+    assert created.status_code == 201
+    run_id = created.json()['run_id']
+    token = auth_headers['Authorization'].removeprefix('Bearer ')
+
+    with client.stream('GET', f'/api/runs/{run_id}/stream?access_token={token}') as response:
+        assert response.status_code == 200
+        assert response.headers['content-type'].startswith('text/event-stream')
