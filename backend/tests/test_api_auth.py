@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+
 
 def test_auth_login_and_me(client) -> None:
     login = client.post(
@@ -79,6 +81,40 @@ def test_register_rejects_duplicate_email(client) -> None:
     )
     assert username_conflict.status_code == 409
     assert "username" in username_conflict.json()["detail"].lower()
+
+
+def test_register_rejects_username_only_payload(client) -> None:
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "not-an-email",
+            "password": "secret123",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "email is required" in response.json()["detail"].lower()
+
+
+def test_register_returns_conflict_on_integrity_error(client, monkeypatch) -> None:
+    from leadbot.api.auth import router
+
+    def _raise_integrity_error(*args, **kwargs):
+        raise sqlite3.IntegrityError("UNIQUE constraint failed: users.email")
+
+    monkeypatch.setattr(router.queries, "create_user", _raise_integrity_error)
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "email": "integrity-check@example.com",
+            "username": "integrity-check",
+            "password": "secret123",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "already exists" in response.json()["detail"].lower()
 
 
 def test_protected_route_requires_bearer(client) -> None:
