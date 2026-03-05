@@ -126,3 +126,25 @@ def test_pipeline_start_uses_dynamic_source_seed_data(client, auth_headers) -> N
     assert companies.status_code == 200
     names = [company['name'] for company in companies.json()]
     assert 'Dynamic Co' in names
+
+
+def test_pipeline_auto_start_queues_job(client, auth_headers, monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_job(config, *, user_id=None):
+        calls.append({"days": config.days, "sources": config.sources, "user_id": user_id})
+        return {"run_id": 1, "status": "queued", "candidates_scanned": 0, "seeded_count": 0}
+
+    monkeypatch.setattr("leadbot.api.routes.pipeline.run_discovery_pipeline_job", fake_run_job)
+
+    response = client.post(
+        "/api/pipeline/auto-start",
+        headers=auth_headers,
+        json={"days": 14, "sources": "funding", "categories": ["devops"], "max_candidates": 10},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    assert calls
+    assert calls[0]["days"] == 14
+    assert calls[0]["sources"] == "funding"
