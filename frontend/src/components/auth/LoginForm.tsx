@@ -14,6 +14,13 @@ export function LoginForm() {
   const [showGoogleButton, setShowGoogleButton] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error')) {
+      setError('Sign in failed. Please try again.');
+    }
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     void getProviders().then((providers) => {
