@@ -5,6 +5,7 @@ import Google from 'next-auth/providers/google';
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const isGoogleAuthConfigured = Boolean(googleClientId && googleClientSecret);
+const apiBaseUrl = process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
 export const authConfig: NextAuthConfig = {
   trustHost: true,
