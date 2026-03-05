@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getProviders, signIn } from 'next-auth/react';
+import Link from 'next/link';
 
 import { GoogleButton } from './GoogleButton';
 import { useSearchParams } from 'next/navigation';
@@ -15,6 +16,7 @@ export function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [showGoogleButton, setShowGoogleButton] = useState(false);
   const sessionExpired = searchParams.get('error') === 'SessionRequired';
+  const registrationSuccess = searchParams.get('registered') === '1';
 
   useEffect(() => {
     const errorCode = searchParams.get('error');
@@ -69,6 +71,9 @@ export function LoginForm() {
     <form className="space-y-3" onSubmit={onSubmit}>
       <p className="text-sm text-slate-600">Sign in with your workspace credentials or Google.</p>
       {sessionExpired ? <p className="text-xs text-amber-700">{AUTH_ERROR_MESSAGE}</p> : null}
+      {registrationSuccess ? (
+        <p className="text-xs text-emerald-700">Account created successfully. Please sign in.</p>
+      ) : null}
       <div className="space-y-1">
         <label className="block text-xs font-medium text-slate-600" htmlFor="email">
           Email
@@ -106,6 +111,12 @@ export function LoginForm() {
         {submitting ? 'Signing in…' : 'Sign in with Credentials'}
       </button>
       {showGoogleButton ? <GoogleButton /> : null}
+      <p className="text-xs text-slate-600">
+        New here?{' '}
+        <Link className="font-medium text-slate-900 underline" href="/register">
+          Create account
+        </Link>
+      </p>
     </form>
   );
 }
