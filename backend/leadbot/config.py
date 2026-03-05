@@ -12,6 +12,7 @@ class CoreSettings(BaseModel):
     app_name: str = "leadbot"
     environment: str = "dev"
     log_level: str = "INFO"
+    log_file: str = "logs/leady-api.log"
 
 
 class ApiSettings(BaseModel):

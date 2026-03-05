@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from fastapi.testclient import TestClient
+
+from leadbot.api.app import app
+
 
 def test_runs_contacts_stats_routes(client, auth_headers) -> None:
     create_run = client.post("/api/runs", headers=auth_headers, json={"status": "running"})
@@ -34,3 +38,30 @@ def test_runs_contacts_stats_routes(client, auth_headers) -> None:
     overview = client.get("/api/stats/overview")
     assert overview.status_code == 200
     assert overview.json()["completed_runs"] == 1
+
+
+def test_global_exception_handler_returns_500_and_logs(monkeypatch) -> None:
+    called: dict[str, str] = {}
+
+    def fake_exception(message: str, method: str, path: str) -> None:
+        called["message"] = message
+        called["method"] = method
+        called["path"] = path
+
+    from leadbot.api import app as app_module
+
+    monkeypatch.setattr(app_module.logger, "exception", fake_exception)
+
+    if not any(getattr(route, "path", None) == "/__test-error" for route in app.routes):
+        @app.get("/__test-error")
+        def _test_error() -> None:
+            raise RuntimeError("boom")
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.get("/__test-error")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal Server Error"}
+    assert called["message"] == "Unhandled server error on %s %s"
+    assert called["method"] == "GET"
+    assert called["path"] == "/__test-error"
