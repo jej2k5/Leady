@@ -2,6 +2,10 @@ import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const isGoogleAuthConfigured = Boolean(googleClientId && googleClientSecret);
+
 export const authConfig: NextAuthConfig = {
   trustHost: true,
   providers: [
@@ -24,10 +28,14 @@ export const authConfig: NextAuthConfig = {
         };
       }
     }),
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? ''
-    })
+    ...(isGoogleAuthConfigured
+      ? [
+          Google({
+            clientId: googleClientId,
+            clientSecret: googleClientSecret
+          })
+        ]
+      : [])
   ],
   session: {
     strategy: 'jwt'
