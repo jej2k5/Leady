@@ -1,7 +1,7 @@
 import { getSession } from 'next-auth/react';
 import { create } from 'zustand';
 
-import { getRuns, startPipelineRun, type RunDto } from '@/lib/api';
+import { getRuns, startPipelineRun, type RunDto, type StartPipelineRunRequest } from '@/lib/api';
 import type { Run, RunLogEntry } from '@/types';
 
 type RunState = {
@@ -14,7 +14,7 @@ type RunState = {
   eventSource?: EventSource;
   setActiveRunId: (id?: string) => void;
   fetchRuns: () => Promise<void>;
-  triggerRun: () => Promise<void>;
+  triggerRun: (payload?: StartPipelineRunRequest) => Promise<void>;
   startRunLogStream: (runId: string) => Promise<void>;
   stopRunLogStream: () => void;
 };
@@ -60,11 +60,11 @@ export const useRunStore = create<RunState>((set, get) => ({
       set({ loading: false, error: error instanceof Error ? error.message : 'Failed to load runs.' });
     }
   },
-  triggerRun: async () => {
+  triggerRun: async (payload) => {
     set({ error: undefined });
 
     try {
-      const { run_id } = await startPipelineRun();
+      const { run_id } = await startPipelineRun(payload);
       await get().fetchRuns();
       void get().startRunLogStream(String(run_id));
     } catch (error) {
