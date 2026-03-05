@@ -2,14 +2,19 @@
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
+
+import { AUTH_ERROR_MESSAGE } from '@/lib/api';
 
 import { GoogleButton } from './GoogleButton';
 
 export function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const sessionExpired = searchParams.get('reason') === 'expired';
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,6 +45,7 @@ export function LoginForm() {
   return (
     <form className="space-y-3" onSubmit={onSubmit}>
       <p className="text-sm text-slate-600">Sign in with your workspace credentials or Google.</p>
+      {sessionExpired ? <p className="text-xs text-amber-700">{AUTH_ERROR_MESSAGE}</p> : null}
       <div className="space-y-1">
         <label className="block text-xs font-medium text-slate-600" htmlFor="email">
           Email
