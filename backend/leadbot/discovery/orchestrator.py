@@ -5,15 +5,19 @@ from __future__ import annotations
 from typing import Any
 
 from ..db.queries import (
+    append_discovery_candidate_evidence,
     list_discovery_candidates,
     mark_discovery_candidate_seeded,
     upsert_discovery_candidate,
 )
 from ..db.session import get_connection
 from ..utils.dedup import normalize_domain
+from .filters import evaluate_category_signals
+from .geo import geography_score
 from .providers.funding_web import fetch_funding_articles
 from .providers.github_orgs import fetch_github_org_signals
 from .providers.job_boards import fetch_job_posts
+from .stage import parse_stage
 
 SourceSeedData = dict[str, list[dict[str, Any]]]
 
@@ -102,6 +106,60 @@ def emit_top_unseeded_source_seed_data(limit_per_source: int = 25) -> SourceSeed
                 continue
 
             evidence_rows = candidate.get("evidence") if isinstance(candidate.get("evidence"), list) else []
+            text_blobs = [company_name, str(candidate.get("domain") or "")]
+            growth_signals: set[str] = set()
+
+            for evidence in evidence_rows:
+                if not isinstance(evidence, dict):
+                    continue
+                payload = evidence.get("payload") if isinstance(evidence.get("payload"), dict) else {}
+                source_group = str(payload.get("source_group") or evidence.get("source_type") or "").strip().lower()
+                source_url = str(evidence.get("source_url") or "").strip()
+                if source_url:
+                    text_blobs.append(source_url)
+                if source_group in {"funding", "hiring", "github"}:
+                    growth_signals.add(source_group)
+                for value in payload.values():
+                    if isinstance(value, str):
+                        text_blobs.append(value)
+
+            category_decision = evaluate_category_signals(text_blobs)
+            stage_decision = parse_stage(text_blobs)
+            geo_decision = geography_score(text_blobs)
+            effective_score = float(candidate.get("score") or 0) + geo_decision.score_delta
+
+            decision_payload: dict[str, Any] = {
+                "kind": "discovery_filter_decision",
+                "passes_category_filter": category_decision.has_strong_signal,
+                "matched_categories": category_decision.matched_categories,
+                "matched_keywords": category_decision.matched_keywords,
+                "growth_signals": sorted(growth_signals),
+                "passes_growth_filter": bool(growth_signals),
+                "stage": stage_decision.stage,
+                "stage_accepted": stage_decision.accepted,
+                "stage_rejection_reason": stage_decision.rejection_reason,
+                "geo_preferred": geo_decision.preferred_match,
+                "geo_matched_terms": geo_decision.matched_terms,
+                "geo_score_delta": geo_decision.score_delta,
+                "effective_score": effective_score,
+            }
+
+            allowed = (
+                category_decision.has_strong_signal
+                and bool(growth_signals)
+                and stage_decision.accepted
+            )
+            decision_payload["allowed_for_seeding"] = allowed
+            append_discovery_candidate_evidence(
+                conn,
+                candidate_id=candidate_id,
+                source_type="selector",
+                source_url=None,
+                payload=decision_payload,
+            )
+            if not allowed:
+                continue
+
             selected_any = False
             for evidence in evidence_rows:
                 if not isinstance(evidence, dict):

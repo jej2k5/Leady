@@ -770,6 +770,37 @@ def list_discovery_candidates(
     return results
 
 
+
+
+def append_discovery_candidate_evidence(
+    conn: sqlite3.Connection,
+    *,
+    candidate_id: int,
+    source_type: str,
+    payload: dict[str, object],
+    source_url: str | None = None,
+) -> None:
+    row = conn.execute("SELECT evidence_json FROM discovery_candidates WHERE id = ?", (candidate_id,)).fetchone()
+    if row is None:
+        raise ValueError(f"Discovery candidate {candidate_id} not found")
+
+    entries = json.loads(row["evidence_json"] or "[]")
+    evidence_entries = [item for item in entries if isinstance(item, dict)] if isinstance(entries, list) else []
+    evidence_entries.append(
+        {
+            "source_type": source_type,
+            "source_url": source_url,
+            "payload": payload,
+            "seen_at": utcnow(),
+        }
+    )
+    conn.execute(
+        "UPDATE discovery_candidates SET evidence_json = ?, last_seen_at = ? WHERE id = ?",
+        (json.dumps(evidence_entries), utcnow(), candidate_id),
+    )
+    conn.commit()
+
+
 def mark_discovery_candidate_seeded(conn: sqlite3.Connection, candidate_id: int) -> None:
     conn.execute(
         """

@@ -62,7 +62,7 @@ def test_emit_top_unseeded_source_seed_data_groups_and_marks_seeded() -> None:
                     {
                         "company": "Delta",
                         "link": "https://news.example.com/delta",
-                        "summary": "Delta raised",
+                        "summary": "Delta raised Series A for AI infrastructure platform in US",
                     }
                 ]
             },
@@ -71,7 +71,7 @@ def test_emit_top_unseeded_source_seed_data_groups_and_marks_seeded() -> None:
                     {
                         "company": "Delta",
                         "link": "https://jobs.example.com/delta",
-                        "text": "Hiring data engineer",
+                        "text": "Hiring platform engineering and DevOps roles",
                     }
                 ]
             },
@@ -94,3 +94,37 @@ def test_emit_top_unseeded_source_seed_data_groups_and_marks_seeded() -> None:
     assert len(selected["hiring"]) == 1
     assert len(selected["github"]) == 1
     assert selected["github"][0]["stars"] >= 0
+
+    with get_connection() as conn:
+        persisted = list_discovery_candidates(conn, status="seeded")
+
+    assert any(
+        any(
+            isinstance(item, dict)
+            and item.get("source_type") == "selector"
+            and isinstance(item.get("payload"), dict)
+            and item["payload"].get("allowed_for_seeding") is True
+            for item in candidate.get("evidence") or []
+        )
+        for candidate in persisted
+    )
+
+
+def test_emit_top_unseeded_source_seed_data_rejects_seed_stage() -> None:
+    discover_seed_data(
+        {
+            "funding": {
+                "rows": [
+                    {
+                        "company": "Seedly",
+                        "link": "https://news.example.com/seedly",
+                        "summary": "Seedly raised Seed for security operations automation",
+                    }
+                ]
+            }
+        }
+    )
+
+    selected = emit_top_unseeded_source_seed_data(limit_per_source=1)
+
+    assert selected == {"funding": [], "hiring": [], "github": []}
