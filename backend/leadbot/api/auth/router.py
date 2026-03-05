@@ -6,13 +6,15 @@ from typing import Any
 import inspect
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 import requests
 
 from ...db import queries
+from ...db.models import User
 from ...config import get_settings
 from ...db.session import get_connection
 from ..dependencies import require_auth
+from .authy_compat import hash_password
 from .authy_setup import auth_manager, mint_backend_jwt
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -21,6 +23,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class LocalLoginRequest(BaseModel):
     username: str
     password: str
+
+
+class LocalRegisterRequest(BaseModel):
+    email: EmailStr | None = None
+    username: str | None = None
+    password: str
+    name: str | None = None
 
 
 class GoogleExchangeRequest(BaseModel):
@@ -79,6 +88,11 @@ async def _authenticate(provider: str, data: dict[str, Any]) -> dict[str, Any]:
     return dict(result)
 
 
+def _validate_local_password_policy(password: str) -> None:
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+
+
 @router.post("/login")
 async def login(payload: LocalLoginRequest) -> dict[str, Any]:
     try:
@@ -94,6 +108,62 @@ async def login(payload: LocalLoginRequest) -> dict[str, Any]:
 
     token = str(result.get("token", ""))
     user = result.get("user") or {}
+    return {"token": token, "user": user}
+
+
+@router.post("/register")
+async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
+    email = str(payload.email).strip().lower() if payload.email else ""
+    username = (payload.username or "").strip().lower()
+
+    if not email and not username:
+        raise HTTPException(status_code=422, detail="Either email or username is required")
+
+    if not email:
+        email = username
+    if not username:
+        username = email
+
+    _validate_local_password_policy(payload.password)
+
+    with get_connection() as conn:
+        if queries.get_user_by_username(conn, username):
+            raise HTTPException(status_code=409, detail="A user with that username already exists")
+        if queries.get_user_by_username(conn, email):
+            raise HTTPException(status_code=409, detail="A user with that email already exists")
+
+        created_user = queries.create_user(
+            conn,
+            User(
+                username=username,
+                email=email,
+                name=payload.name,
+                password_hash=hash_password(payload.password),
+                provider="local",
+                role="viewer",
+            ),
+        )
+
+    try:
+        result = await _authenticate(
+            "local",
+            {
+                "username": username,
+                "password": payload.password,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail="Unable to create login session") from exc
+
+    token = str(result.get("token", ""))
+    user = result.get("user") or {}
+    if not user:
+        user = {
+            "id": str(created_user.id or ""),
+            "email": str(created_user.email),
+            "name": created_user.name,
+            "role": created_user.role,
+        }
     return {"token": token, "user": user}
 
 
