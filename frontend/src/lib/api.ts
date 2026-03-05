@@ -67,6 +67,40 @@ export type StartPipelineRunRequest = {
   source_seed_data?: Record<string, Array<Record<string, string | number | boolean | null>>>;
 };
 
+export type DiscoveryCandidateEvidenceDto = {
+  source_type?: string | null;
+  source_url?: string | null;
+  payload?: Record<string, string | number | boolean | null | undefined>;
+  seen_at?: string | null;
+};
+
+export type DiscoveryCandidateDto = {
+  id: number;
+  company_name: string;
+  domain?: string | null;
+  source_type: string;
+  source_url?: string | null;
+  score: number;
+  status: string;
+  category?: string | null;
+  stage?: string | null;
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
+  evidence: DiscoveryCandidateEvidenceDto[];
+};
+
+export type ListDiscoveryCandidatesParams = {
+  category?: string;
+  stage?: string;
+  source?: string;
+  minScore?: number;
+};
+
+export type ApproveDiscoveryCandidatesRequest = {
+  candidate_ids: number[];
+  action: 'approve' | 'reject';
+};
+
 export type StatsOverviewDto = {
   runs: number;
   companies: number;
@@ -159,4 +193,23 @@ export async function getStatsOverview(): Promise<StatsOverviewDto> {
   const response = await apiClient.get<StatsOverviewDto>('/api/stats/overview');
 
   return response.data;
+}
+
+export async function listDiscoveryCandidates(
+  params?: ListDiscoveryCandidatesParams
+): Promise<DiscoveryCandidateDto[]> {
+  const response = await apiClient.get<DiscoveryCandidateDto[]>('/api/discovery/candidates', {
+    params: {
+      category: params?.category,
+      stage: params?.stage,
+      source: params?.source,
+      min_score: params?.minScore
+    }
+  });
+
+  return response.data;
+}
+
+export async function approveDiscoveryCandidates(payload: ApproveDiscoveryCandidatesRequest): Promise<void> {
+  await apiClient.post('/api/discovery/candidates/approve', payload);
 }
