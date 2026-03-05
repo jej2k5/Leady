@@ -6,7 +6,7 @@ import { getProviders, signIn } from 'next-auth/react';
 import { GoogleButton } from './GoogleButton';
 
 export function LoginForm() {
-  const searchParams = useSearchParams();
+  //const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
