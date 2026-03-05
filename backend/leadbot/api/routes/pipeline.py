@@ -13,6 +13,7 @@ from ...db.queries import create_run, list_companies, persist_raw_candidate, upd
 from ...db.session import get_connection
 from ...exports.csv_export import OUTREACH_QUEUE_HEADERS, build_outreach_queue_csv
 from ...exports.google_sheets import append_rows_to_google_sheets
+from ...jobs.discovery_pipeline_job import DiscoveryPipelineConfig, run_discovery_pipeline_job
 from ...pipeline.orchestrator import run_pipeline_for_run
 from ..dependencies import require_auth
 
@@ -33,6 +34,13 @@ class StartPipelineRequest(BaseModel):
     sources: str = "funding,hiring,github"
     include_unknown_stage: bool = False
     source_seed_data: dict[str, list[dict[str, str | int | float | bool | None]]] = Field(default_factory=dict)
+
+
+class AutoStartPipelineRequest(BaseModel):
+    days: int = Field(default=30, ge=1, le=365)
+    sources: str = "funding,hiring,github"
+    categories: list[str] = Field(default_factory=list)
+    max_candidates: int = Field(default=25, ge=1, le=1000)
 
 
 @router.post("/start", status_code=status.HTTP_202_ACCEPTED)
@@ -86,3 +94,15 @@ def complete_pipeline(payload: CompletePipelineRequest) -> dict[str, object]:
             "google_sheets": sheets_result,
         },
     }
+
+
+@router.post("/auto-start", status_code=status.HTTP_202_ACCEPTED)
+def auto_start_pipeline(
+    payload: AutoStartPipelineRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(require_auth),
+) -> dict[str, object]:
+    config = DiscoveryPipelineConfig.model_validate(payload.model_dump())
+    user_id = int(current_user.get("sub")) if current_user.get("sub") else None
+    background_tasks.add_task(run_discovery_pipeline_job, config, user_id=user_id)
+    return {"status": "queued", "detail": "auto discovery pipeline job scheduled"}

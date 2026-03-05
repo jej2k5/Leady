@@ -39,6 +39,12 @@ class ScrapingSettings(BaseModel):
 class DiscoverySettings(BaseModel):
     batch_size: int = 25
     max_candidates_per_run: int = 500
+    auto_start_enabled: bool = False
+    auto_start_hour_utc: int = 3
+    auto_start_days: int = 30
+    auto_start_sources: str = "funding,hiring,github"
+    auto_start_max_candidates: int = 25
+    auto_start_categories: list[str] = Field(default_factory=list)
 
 
 class ScoringSettings(BaseModel):

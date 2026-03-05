@@ -109,6 +109,18 @@ SCHEMA_STATEMENTS = (
         status TEXT NOT NULL DEFAULT 'unseeded'
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS discovery_pipeline_job_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id INTEGER NOT NULL,
+        candidates_scanned INTEGER NOT NULL DEFAULT 0,
+        seeded_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'completed',
+        error TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (run_id) REFERENCES runs(id)
+    )
+    """,
 )
 
 INDEX_STATEMENTS = (
@@ -120,6 +132,7 @@ INDEX_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_contacts_company_id ON contacts(company_id)",
     "CREATE INDEX IF NOT EXISTS idx_discovery_candidates_status_score ON discovery_candidates(status, score DESC, last_seen_at DESC)",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_discovery_candidates_identity ON discovery_candidates(COALESCE(NULLIF(lower(trim(domain)), ''), NULLIF(lower(trim(company_name)), '')))",
+    "CREATE INDEX IF NOT EXISTS idx_discovery_pipeline_job_runs_run_id ON discovery_pipeline_job_runs(run_id)",
 )
 
 
@@ -812,6 +825,26 @@ def mark_discovery_candidate_seeded(conn: sqlite3.Connection, candidate_id: int)
         (utcnow(), candidate_id),
     )
     conn.commit()
+
+
+def create_discovery_pipeline_job_run(
+    conn: sqlite3.Connection,
+    *,
+    run_id: int,
+    candidates_scanned: int,
+    seeded_count: int,
+    status: str = "completed",
+    error: str | None = None,
+) -> int:
+    cursor = conn.execute(
+        """
+        INSERT INTO discovery_pipeline_job_runs (run_id, candidates_scanned, seeded_count, status, error, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (run_id, candidates_scanned, seeded_count, status, error, utcnow()),
+    )
+    conn.commit()
+    return int(cursor.lastrowid)
 
 
 def persist_raw_candidate(conn: sqlite3.Connection, run_id: int, candidate: RawCandidate) -> Company:
