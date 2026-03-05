@@ -6,7 +6,6 @@ import csv
 import io
 import importlib
 import importlib.util
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import typer
@@ -36,72 +35,11 @@ from .exports.csv_export import (
 )
 from .exports.google_sheets import append_rows_to_google_sheets
 from .scoring.engine import evaluate_candidate
-from .sources.funding_news import fetch_candidates as fetch_funding_candidates
-from .sources.github_signals import fetch_candidates as fetch_github_candidates
-from .sources.hiring_signals import fetch_candidates as fetch_hiring_candidates
+from .pipeline.orchestrator import discover_candidates as _discover_candidates
+from .pipeline.orchestrator import parse_sources as _parse_sources
 
 app = typer.Typer(help="Leady backend CLI")
 console = Console()
-
-
-def _parse_sources(sources: str) -> list[str]:
-    allowed = {"funding", "hiring", "github"}
-    names = [item.strip().lower() for item in sources.split(",") if item.strip()]
-    if not names:
-        raise typer.BadParameter("--sources must include at least one source")
-    invalid = [name for name in names if name not in allowed]
-    if invalid:
-        raise typer.BadParameter(f"Unknown sources: {', '.join(invalid)}")
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for name in names:
-        if name not in seen:
-            ordered.append(name)
-            seen.add(name)
-    return ordered
-
-
-def _discover_candidates(days: int, sources: list[str]) -> list[RawCandidate]:
-    since = (datetime.now(tz=UTC) - timedelta(days=days)).date().isoformat()
-    candidates: list[RawCandidate] = []
-    if "funding" in sources:
-        candidates.extend(
-            fetch_funding_candidates(
-                [
-                    {
-                        "company_name": "Acme Analytics",
-                        "url": "https://news.example.com/acme-series-a",
-                        "text": f"Acme Analytics raised a round on {since} to scale GTM and hiring.",
-                    }
-                ]
-            )
-        )
-    if "hiring" in sources:
-        candidates.extend(
-            fetch_hiring_candidates(
-                [
-                    {
-                        "company_name": "Northstar Labs",
-                        "url": "https://jobs.example.com/northstar-platform-engineer",
-                        "description": "Hiring platform and backend engineers to build developer tooling.",
-                    }
-                ]
-            )
-        )
-    if "github" in sources:
-        candidates.extend(
-            fetch_github_candidates(
-                [
-                    {
-                        "company_name": "Acme Analytics",
-                        "url": "https://github.com/acme/infra",
-                        "stars": 210,
-                    }
-                ]
-            )
-        )
-    return candidates
-
 
 @app.command()
 def version() -> None:
@@ -120,7 +58,10 @@ def run(
     ),
 ) -> None:
     """Run pipeline orchestration: discovery -> dedup -> enrichment -> scoring -> export."""
-    selected_sources = _parse_sources(sources)
+    try:
+        selected_sources = _parse_sources(sources)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
     with get_connection() as conn:
         run_id = create_run(conn, user_id=None, status=RunStatus.running)
