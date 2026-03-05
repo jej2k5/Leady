@@ -121,3 +121,26 @@ def test_protected_route_requires_bearer(client) -> None:
     response = client.get("/api/companies")
     assert response.status_code == 401
     assert response.json()["detail"] == "Missing bearer token"
+
+
+def test_login_accepts_object_auth_result(client, monkeypatch) -> None:
+    from leadbot.api.auth import router
+
+    class AuthResult:
+        def __init__(self) -> None:
+            self.token = "token-from-object"
+            self.user = {"email": "user@example.com"}
+
+    def _return_object_result(*args, **kwargs):
+        return AuthResult()
+
+    monkeypatch.setattr(router.auth_manager, "authenticate", _return_object_result)
+
+    response = client.post(
+        "/api/auth/login",
+        json={"username": "user@example.com", "password": "superpass123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["token"] == "token-from-object"
+    assert response.json()["user"]["email"] == "user@example.com"

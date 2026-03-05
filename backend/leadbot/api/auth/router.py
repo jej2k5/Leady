@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 import inspect
+import logging
 import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,6 +20,7 @@ from .authy_compat import hash_password
 from .authy_setup import auth_manager, mint_backend_jwt
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class LocalLoginRequest(BaseModel):
@@ -82,15 +84,41 @@ def _validate_google_identity(payload: GoogleExchangeRequest) -> dict[str, Any]:
     }
 
 
+def _normalize_auth_result(result: Any) -> dict[str, Any]:
+    if isinstance(result, Mapping):
+        return dict(result)
+
+    model_dump = getattr(result, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump()
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+
+    legacy_dict = getattr(result, "dict", None)
+    if callable(legacy_dict):
+        dumped = legacy_dict()
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+
+    token = getattr(result, "token", None)
+    user = getattr(result, "user", None)
+    if token is not None or user is not None:
+        normalized: dict[str, Any] = {"token": token, "user": user}
+        return normalized
+
+    raise TypeError(f"Unsupported auth result type: {type(result).__name__}")
+
+
 async def _authenticate(provider: str, data: dict[str, Any]) -> dict[str, Any]:
     result = auth_manager.authenticate(provider, data)
     if inspect.isawaitable(result):
         result = await result
-    return dict(result)
+    return _normalize_auth_result(result)
 
 
 def _validate_local_password_policy(password: str) -> None:
     if len(password) < 8:
+        logger.warning("Registration rejected: password does not meet length policy")
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
 
 
@@ -117,7 +145,10 @@ async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
     email = str(payload.email).strip().lower() if payload.email else ""
     username = (payload.username or "").strip().lower()
 
+    logger.info("Registration attempt received for email=%s username=%s", email or "<missing>", username or "<missing>")
+
     if not email:
+        logger.warning("Registration rejected: missing email (username=%s)", username or "<missing>")
         raise HTTPException(status_code=422, detail="Email is required")
 
     if not username:
@@ -127,8 +158,10 @@ async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
 
     with get_connection() as conn:
         if queries.get_user_by_username(conn, username):
+            logger.warning("Registration rejected: username already exists (username=%s email=%s)", username, email)
             raise HTTPException(status_code=409, detail="A user with that username already exists")
         if queries.get_user_by_username(conn, email):
+            logger.warning("Registration rejected: email already exists (email=%s username=%s)", email, username)
             raise HTTPException(status_code=409, detail="A user with that email already exists")
 
         try:
@@ -144,13 +177,30 @@ async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
                 ),
             )
         except ValidationError as exc:
+            logger.warning(
+                "Registration payload validation failed for email=%s username=%s: %s",
+                email,
+                username,
+                exc,
+            )
             raise HTTPException(status_code=422, detail="Invalid registration payload") from exc
         except sqlite3.IntegrityError as exc:
+            logger.warning(
+                "Registration failed due to database integrity error for email=%s username=%s: %s",
+                email,
+                username,
+                exc,
+            )
             raise HTTPException(
                 status_code=409,
                 detail="A user with that email or username already exists",
             ) from exc
         except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "Registration failed with unexpected error while creating user (email=%s username=%s)",
+                email,
+                username,
+            )
             raise HTTPException(status_code=500, detail=f"Unable to register user {exc}") from exc
 
     try:
@@ -162,6 +212,11 @@ async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
             },
         )
     except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "Registration created user but failed to create login session (email=%s username=%s)",
+            email,
+            username,
+        )
         raise HTTPException(status_code=500, detail="Unable to create login session") from exc
 
     token = str(result.get("token", ""))
