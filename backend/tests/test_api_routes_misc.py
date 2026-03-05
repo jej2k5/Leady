@@ -100,3 +100,29 @@ def test_run_stream_supports_access_token_query_param(client, auth_headers) -> N
     with client.stream('GET', f'/api/runs/{run_id}/stream?access_token={token}') as response:
         assert response.status_code == 200
         assert response.headers['content-type'].startswith('text/event-stream')
+
+
+def test_pipeline_start_uses_dynamic_source_seed_data(client, auth_headers) -> None:
+    response = client.post(
+        '/api/pipeline/start',
+        headers=auth_headers,
+        json={
+            'sources': 'funding',
+            'source_seed_data': {
+                'funding': [
+                    {
+                        'company_name': 'Dynamic Co',
+                        'url': 'https://news.example.com/dynamic',
+                        'text': 'Dynamic Co raised a growth round and is hiring quickly.'
+                    }
+                ]
+            }
+        },
+    )
+    assert response.status_code == 202
+    run_id = response.json()['run_id']
+
+    companies = client.get('/api/companies', headers=auth_headers, params={'run_id': run_id})
+    assert companies.status_code == 200
+    names = [company['name'] for company in companies.json()]
+    assert 'Dynamic Co' in names

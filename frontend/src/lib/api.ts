@@ -64,6 +64,7 @@ export type StartPipelineRunRequest = {
   days?: number;
   sources?: string;
   include_unknown_stage?: boolean;
+  source_seed_data?: Record<string, Array<Record<string, string | number | boolean | null>>>;
 };
 
 export type StatsOverviewDto = {

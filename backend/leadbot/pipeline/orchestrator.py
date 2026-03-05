@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from ..db.models import Company, RawCandidate, RunStatus, SourceType
 from ..db.queries import list_companies, persist_raw_candidate, update_run_status, upsert_company
@@ -12,6 +13,9 @@ from ..scoring.engine import evaluate_candidate
 from ..sources.funding_news import fetch_candidates as fetch_funding_candidates
 from ..sources.github_signals import fetch_candidates as fetch_github_candidates
 from ..sources.hiring_signals import fetch_candidates as fetch_hiring_candidates
+
+
+SourceSeedData = dict[str, list[dict[str, Any]]]
 
 
 def parse_sources(sources: str) -> list[str]:
@@ -34,48 +38,45 @@ def parse_sources(sources: str) -> list[str]:
     return ordered
 
 
-def discover_candidates(days: int, sources: list[str]) -> list[RawCandidate]:
+def default_source_seed_data(days: int) -> SourceSeedData:
     since = (datetime.now(tz=UTC) - timedelta(days=days)).date().isoformat()
+    return {
+        "funding": [
+            {
+                "company_name": "Acme Analytics",
+                "url": "https://news.example.com/acme-series-a",
+                "text": f"Acme Analytics raised a round on {since} to scale GTM and hiring.",
+            }
+        ],
+        "hiring": [
+            {
+                "company_name": "Northstar Labs",
+                "url": "https://jobs.example.com/northstar-platform-engineer",
+                "description": "Hiring platform and backend engineers to build developer tooling.",
+            }
+        ],
+        "github": [
+            {
+                "company_name": "Acme Analytics",
+                "url": "https://github.com/acme/infra",
+                "stars": 210,
+            }
+        ],
+    }
+
+
+def discover_candidates(days: int, sources: list[str], source_seed_data: SourceSeedData | None = None) -> list[RawCandidate]:
+    seed_data = source_seed_data or default_source_seed_data(days)
     candidates: list[RawCandidate] = []
 
     if "funding" in sources:
-        candidates.extend(
-            fetch_funding_candidates(
-                [
-                    {
-                        "company_name": "Acme Analytics",
-                        "url": "https://news.example.com/acme-series-a",
-                        "text": f"Acme Analytics raised a round on {since} to scale GTM and hiring.",
-                    }
-                ]
-            )
-        )
+        candidates.extend(fetch_funding_candidates(seed_data.get("funding", [])))
 
     if "hiring" in sources:
-        candidates.extend(
-            fetch_hiring_candidates(
-                [
-                    {
-                        "company_name": "Northstar Labs",
-                        "url": "https://jobs.example.com/northstar-platform-engineer",
-                        "description": "Hiring platform and backend engineers to build developer tooling.",
-                    }
-                ]
-            )
-        )
+        candidates.extend(fetch_hiring_candidates(seed_data.get("hiring", [])))
 
     if "github" in sources:
-        candidates.extend(
-            fetch_github_candidates(
-                [
-                    {
-                        "company_name": "Acme Analytics",
-                        "url": "https://github.com/acme/infra",
-                        "stars": 210,
-                    }
-                ]
-            )
-        )
+        candidates.extend(fetch_github_candidates(seed_data.get("github", [])))
 
     return candidates
 
@@ -86,6 +87,7 @@ def run_pipeline_for_run(
     days: int = 30,
     sources: str = "funding,hiring,github",
     include_unknown_stage: bool = False,
+    source_seed_data: SourceSeedData | None = None,
 ) -> None:
     selected_sources = parse_sources(sources)
 
@@ -93,7 +95,7 @@ def run_pipeline_for_run(
         with get_connection() as conn:
             update_run_status(conn, run_id, RunStatus.running)
 
-        discovered = discover_candidates(days=days, sources=selected_sources)
+        discovered = discover_candidates(days=days, sources=selected_sources, source_seed_data=source_seed_data)
 
         with get_connection() as conn:
             for candidate in discovered:
