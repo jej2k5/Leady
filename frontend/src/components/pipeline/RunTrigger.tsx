@@ -25,6 +25,7 @@ type GithubSeed = {
 export function RunTrigger() {
   const { triggerRun, loading } = useRunStore();
   const [error, setError] = useState<string | undefined>();
+  const [includeUnknownStage, setIncludeUnknownStage] = useState(false);
 
   const [funding, setFunding] = useState<FundingSeed>({ company_name: '', url: '', text: '' });
   const [hiring, setHiring] = useState<HiringSeed>({ company_name: '', url: '', description: '' });
@@ -94,11 +95,14 @@ export function RunTrigger() {
     setError(undefined);
 
     if (!Object.keys(sourceSeedData).length) {
-      void triggerRun();
+      void triggerRun({ include_unknown_stage: includeUnknownStage });
       return;
     }
 
-    void triggerRun({ source_seed_data: sourceSeedData });
+    void triggerRun({
+      include_unknown_stage: includeUnknownStage,
+      source_seed_data: sourceSeedData
+    });
   }
 
   return (
@@ -174,6 +178,20 @@ export function RunTrigger() {
             onChange={(event) => setGithub((current) => ({ ...current, stars: Number(event.target.value) || 0 }))}
           />
         </div>
+      </div>
+
+      <div className="rounded border border-slate-200 p-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+          <input
+            type="checkbox"
+            checked={includeUnknownStage}
+            onChange={(event) => setIncludeUnknownStage(event.target.checked)}
+          />
+          Include unknown stage leads
+        </label>
+        <p className="mt-2 text-xs text-slate-500">
+          Leads with an unknown stage may otherwise be hidden from this run.
+        </p>
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
