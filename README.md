@@ -146,8 +146,10 @@ docker compose down -v
 ```bash
 curl -s http://localhost:8000/api/auth/login \
   -H 'content-type: application/json' \
-  -d '{"email":"demo@example.com","password":"superpass123","full_name":"Demo User"}'
+  -d '{"username":"demo@example.com","password":"superpass123"}'
 ```
+
+`username` accepts either a username or an email address.
 
 Use the returned bearer token in protected routes:
 
