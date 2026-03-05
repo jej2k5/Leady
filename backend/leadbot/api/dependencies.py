@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Query
 
 from .auth.authy_setup import auth_manager
 
 
-def require_auth(authorization: str | None = Header(default=None)) -> dict:
-    """Require valid Authy JWT from Authorization header."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
+def require_auth(
+    authorization: str | None = Header(default=None),
+    access_token: str | None = Query(default=None),
+) -> dict:
+    """Require valid Authy JWT from Authorization header or access_token query param."""
+    token: str | None = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+    elif access_token:
+        token = access_token.strip()
 
-    token = authorization.removeprefix("Bearer ").strip()
     if not token:
         raise HTTPException(status_code=401, detail="Missing bearer token")
 

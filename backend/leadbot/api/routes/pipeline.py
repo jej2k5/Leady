@@ -5,14 +5,16 @@ from __future__ import annotations
 import csv
 import io
 
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
 from ...db.models import Company, RawCandidate, RunStatus
-from ...db.queries import list_companies, persist_raw_candidate, update_run_status
+from ...db.queries import create_run, list_companies, persist_raw_candidate, update_run_status
 from ...db.session import get_connection
 from ...exports.csv_export import OUTREACH_QUEUE_HEADERS, build_outreach_queue_csv
 from ...exports.google_sheets import append_rows_to_google_sheets
+from ...pipeline.orchestrator import run_pipeline_for_run
+from ..dependencies import require_auth
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
@@ -24,6 +26,34 @@ class IngestCandidateRequest(BaseModel):
 
 class CompletePipelineRequest(BaseModel):
     run_id: int
+
+
+class StartPipelineRequest(BaseModel):
+    days: int = 30
+    sources: str = "funding,hiring,github"
+    include_unknown_stage: bool = False
+    source_seed_data: dict[str, list[dict[str, str | int | float | bool | None]]] = Field(default_factory=dict)
+
+
+@router.post("/start", status_code=status.HTTP_202_ACCEPTED)
+def start_pipeline(
+    payload: StartPipelineRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(require_auth),
+) -> dict[str, object]:
+    with get_connection() as conn:
+        run_id = create_run(conn, user_id=int(current_user.get("sub")) if current_user.get("sub") else None)
+
+    background_tasks.add_task(
+        run_pipeline_for_run,
+        run_id,
+        days=payload.days,
+        sources=payload.sources,
+        include_unknown_stage=payload.include_unknown_stage,
+        source_seed_data=payload.source_seed_data or None,
+    )
+
+    return {"run_id": run_id, "status": "queued"}
 
 
 @router.post("/ingest", response_model=Company, status_code=status.HTTP_201_CREATED)

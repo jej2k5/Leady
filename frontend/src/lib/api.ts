@@ -59,6 +59,14 @@ export type RunDto = {
   contacts_collected: number;
 };
 
+
+export type StartPipelineRunRequest = {
+  days?: number;
+  sources?: string;
+  include_unknown_stage?: boolean;
+  source_seed_data?: Record<string, Array<Record<string, string | number | boolean | null>>>;
+};
+
 export type StatsOverviewDto = {
   runs: number;
   companies: number;
@@ -139,6 +147,12 @@ export async function createRun(status: RunDto['status'] = 'queued'): Promise<{ 
 
 export async function updateRunStatus(runId: number, status: RunDto['status']): Promise<void> {
   await apiClient.patch(`/api/runs/${runId}`, { status });
+}
+
+export async function startPipelineRun(payload?: StartPipelineRunRequest): Promise<{ run_id: number; status: string }> {
+  const response = await apiClient.post<{ run_id: number; status: string }>(`/api/pipeline/start`, payload ?? {});
+
+  return response.data;
 }
 
 export async function getStatsOverview(): Promise<StatsOverviewDto> {

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ...db.models import RunStatus, RunSummary
@@ -42,3 +45,29 @@ def update_run(run_id: int, payload: UpdateRunStatusRequest) -> dict[str, str]:
     with get_connection() as conn:
         update_run_status(conn, run_id, payload.status)
     return {"detail": "updated"}
+
+
+@router.get("/{run_id}/stream")
+async def stream_run(run_id: int) -> StreamingResponse:
+    async def event_generator():
+        while True:
+            with get_connection() as conn:
+                runs = list_runs(conn)
+
+            current = next((run for run in runs if run.run_id == run_id), None)
+            if current is None:
+                yield f"data: Run {run_id} not found\n\n"
+                break
+
+            message = (
+                f"Status {current.status.value}. Companies {current.companies_discovered}, "
+                f"signals {current.signals_collected}, contacts {current.contacts_collected}."
+            )
+            yield f"data: {message}\n\n"
+
+            if current.status in {RunStatus.completed, RunStatus.failed}:
+                break
+
+            await asyncio.sleep(5)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
