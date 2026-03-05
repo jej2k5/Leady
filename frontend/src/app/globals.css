@@ -1,9 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   color-scheme: light;
-  font-family: Inter, system-ui, sans-serif;
 }
 
 body {
   margin: 0;
-  padding: 2rem;
 }
