@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { getProviders, signIn } from 'next-auth/react';
 
 import { GoogleButton } from './GoogleButton';
 
@@ -10,6 +10,23 @@ export function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showGoogleButton, setShowGoogleButton] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    void getProviders().then((providers) => {
+      if (!active) {
+        return;
+      }
+
+      setShowGoogleButton(Boolean(providers?.google));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -76,7 +93,7 @@ export function LoginForm() {
       >
         {submitting ? 'Signing in…' : 'Sign in with Credentials'}
       </button>
-      <GoogleButton />
+      {showGoogleButton ? <GoogleButton /> : null}
     </form>
   );
 }
