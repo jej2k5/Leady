@@ -65,3 +65,27 @@ def test_global_exception_handler_returns_500_and_logs(monkeypatch) -> None:
     assert called["message"] == "Unhandled server error on %s %s"
     assert called["method"] == "GET"
     assert called["path"] == "/__test-error"
+
+
+def test_pipeline_start_kicks_off_run(client, auth_headers) -> None:
+    response = client.post('/api/pipeline/start', headers=auth_headers, json={})
+    assert response.status_code == 202
+    payload = response.json()
+    assert isinstance(payload['run_id'], int)
+
+    runs = client.get('/api/runs', headers=auth_headers)
+    assert runs.status_code == 200
+    assert any(run['run_id'] == payload['run_id'] for run in runs.json())
+
+
+def test_run_stream_route_returns_event_stream(client, auth_headers) -> None:
+    created = client.post('/api/runs', headers=auth_headers, json={'status': 'completed'})
+    assert created.status_code == 201
+    run_id = created.json()['run_id']
+
+    with client.stream('GET', f'/api/runs/{run_id}/stream', headers=auth_headers) as response:
+        assert response.status_code == 200
+        assert response.headers['content-type'].startswith('text/event-stream')
+        first_line = next(response.iter_lines())
+
+    assert first_line.startswith('data: Status completed.')

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { createRun, getRuns, updateRunStatus, type RunDto } from '@/lib/api';
+import { getRuns, startPipelineRun, type RunDto } from '@/lib/api';
 import type { Run, RunLogEntry } from '@/types';
 
 type RunState = {
@@ -63,12 +63,11 @@ export const useRunStore = create<RunState>((set, get) => ({
     set({ error: undefined });
 
     try {
-      const { run_id } = await createRun('queued');
-      await updateRunStatus(run_id, 'running');
+      const { run_id } = await startPipelineRun();
       await get().fetchRuns();
       get().startRunLogStream(String(run_id));
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to trigger run.' });
+      set({ error: error instanceof Error ? error.message : 'Failed to start pipeline run.' });
     }
   },
   startRunLogStream: (runId) => {
