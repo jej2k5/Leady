@@ -14,13 +14,14 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showGoogleButton, setShowGoogleButton] = useState(false);
+  const sessionExpired = searchParams.get('error') === 'SessionRequired';
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('error')) {
+    const errorCode = searchParams.get('error');
+    if (errorCode && errorCode !== 'SessionRequired') {
       setError('Sign in failed. Please try again.');
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     let active = true;
