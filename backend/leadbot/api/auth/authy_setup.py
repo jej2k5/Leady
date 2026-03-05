@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
+import time
 from functools import lru_cache
 from typing import Any
 
@@ -73,3 +78,38 @@ def get_auth_manager() -> AuthManager:
 
 # singleton for direct imports in dependencies/routes
 auth_manager = get_auth_manager()
+
+
+def mint_backend_jwt(user: dict[str, Any]) -> str:
+    """Mint a backend JWT that is verifiable by ``require_auth``.
+
+    The token is signed with the same secret configured for AuthManager.
+    """
+
+    settings = get_settings()
+    now = int(time.time())
+    payload = {
+        "sub": str(user.get("id") or user.get("sub") or user.get("email") or "google-user"),
+        "email": str(user.get("email") or ""),
+        "name": user.get("name"),
+        "role": str(user.get("role") or "viewer"),
+        "provider": "google",
+        "iat": now,
+        "exp": now + int(settings.auth.jwt_ttl_seconds),
+    }
+
+    google_sub = user.get("sub")
+    if google_sub:
+        payload["google_sub"] = str(google_sub)
+
+    body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("utf-8")
+    body = body.rstrip("=")
+    signature = base64.urlsafe_b64encode(
+        hmac.new(settings.auth.jwt_secret.encode("utf-8"), body.encode("utf-8"), hashlib.sha256).digest()
+    ).decode("utf-8")
+    token = f"{body}.{signature.rstrip('=')}"
+
+    if not auth_manager.verify_token(token):
+        raise ValueError("Unable to mint a valid backend JWT")
+
+    return token

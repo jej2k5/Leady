@@ -71,8 +71,36 @@ export const authConfig: NextAuthConfig = {
   },
   callbacks: {
     async jwt({ token, account, user }) {
-      if (account?.provider === 'google' && account.access_token) {
-        token.accessToken = account.access_token;
+      if (account?.provider === 'google') {
+        const googleIdToken = typeof account.id_token === 'string' ? account.id_token : undefined;
+        const googleAccessToken = typeof account.access_token === 'string' ? account.access_token : undefined;
+
+        if (googleIdToken || googleAccessToken) {
+          try {
+            const response = await fetch(`${apiBaseUrl}/api/auth/google/exchange`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                id_token: googleIdToken,
+                access_token: googleAccessToken
+              })
+            });
+
+            if (response.ok) {
+              const payload = (await response.json()) as { token?: string; user?: { id?: string } };
+              if (payload.token) {
+                token.accessToken = payload.token;
+              }
+              if (payload.user?.id) {
+                token.userId = payload.user.id;
+              }
+            }
+          } catch {
+            // Keep existing token if the backend exchange temporarily fails.
+          }
+        }
       }
 
       if (user && 'backendAccessToken' in user && user.backendAccessToken) {
