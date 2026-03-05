@@ -7,11 +7,13 @@ import inspect
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+import requests
 
 from ...db import queries
+from ...config import get_settings
 from ...db.session import get_connection
 from ..dependencies import require_auth
-from .authy_setup import auth_manager
+from .authy_setup import auth_manager, mint_backend_jwt
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -19,6 +21,55 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class LocalLoginRequest(BaseModel):
     username: str
     password: str
+
+
+class GoogleExchangeRequest(BaseModel):
+    id_token: str | None = None
+    access_token: str | None = None
+
+
+def _google_tokeninfo_request(url: str, params: dict[str, str]) -> dict[str, Any]:
+    response = requests.get(url, params=params, timeout=8)
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Google token validation failed")
+    return dict(response.json())
+
+
+def _validate_google_identity(payload: GoogleExchangeRequest) -> dict[str, Any]:
+    settings = get_settings()
+    google_client_id = settings.auth.google_client_id
+    if not google_client_id:
+        raise HTTPException(status_code=400, detail="Google OAuth is not configured")
+
+    if payload.id_token:
+        tokeninfo = _google_tokeninfo_request(
+            "https://oauth2.googleapis.com/tokeninfo",
+            {"id_token": payload.id_token},
+        )
+    elif payload.access_token:
+        tokeninfo = _google_tokeninfo_request(
+            "https://www.googleapis.com/oauth2/v3/tokeninfo",
+            {"access_token": payload.access_token},
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Missing Google id_token or access_token")
+
+    aud = tokeninfo.get("aud")
+    if aud != google_client_id:
+        raise HTTPException(status_code=401, detail="Google token audience mismatch")
+
+    email = tokeninfo.get("email")
+    sub = tokeninfo.get("sub")
+    if not email or not sub:
+        raise HTTPException(status_code=401, detail="Google token missing required identity claims")
+
+    return {
+        "id": str(sub),
+        "sub": str(sub),
+        "email": str(email),
+        "name": tokeninfo.get("name") or str(email).split("@", 1)[0],
+        "role": "viewer",
+    }
 
 
 async def _authenticate(provider: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -89,6 +140,32 @@ async def google_callback(
                 provider="google",
                 google_sub=user.get("sub"),
             )
+
+    return {"token": token, "user": user}
+
+
+@router.post("/google/exchange")
+async def google_exchange(payload: GoogleExchangeRequest) -> dict[str, Any]:
+    try:
+        user = _validate_google_identity(payload)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Unable to validate Google identity") from exc
+
+    with get_connection() as conn:
+        queries.upsert_oauth_user(
+            conn,
+            email=user["email"],
+            name=user.get("name"),
+            provider="google",
+            google_sub=user.get("sub"),
+        )
+
+    try:
+        token = mint_backend_jwt(user)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail="Unable to mint backend JWT") from exc
 
     return {"token": token, "user": user}
 
