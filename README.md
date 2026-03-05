@@ -40,6 +40,13 @@ Leady is a mono-repo for discovering, enriching, scoring, and exporting outbound
    cp .env.example .env
    ```
 
+   For Docker Compose, make sure both API base URL variables are set with different targets:
+
+   - `API_BASE_URL=http://leady-api:8000` for **server-side NextAuth** requests running inside the `leady-ui` container (container-to-container network).
+   - `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000` for **browser-side** requests from your host machine.
+
+   This split ensures NextAuth credential and Google token exchange callbacks can reach `leady-api` from inside Docker while the browser still calls the published localhost port.
+
 2. Start the full stack:
 
    ```bash
