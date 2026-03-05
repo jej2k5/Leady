@@ -3,6 +3,39 @@ import { getSession } from 'next-auth/react';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
+export const AUTH_ERROR_EVENT = 'leady:auth-error';
+export const AUTH_ERROR_MESSAGE = 'Session expired or not authenticated.';
+
+export class AuthError extends Error {
+  readonly code = 'AUTH_REQUIRED';
+
+  constructor(message = AUTH_ERROR_MESSAGE) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+export function isAuthError(error: unknown): error is AuthError {
+  return error instanceof AuthError;
+}
+
+function isProtectedRoute(url?: string): boolean {
+  if (!url) {
+    return false;
+  }
+
+  const pathname = url.startsWith('http') ? new URL(url).pathname : url;
+  return pathname.startsWith('/api/');
+}
+
+function broadcastAuthError(message: string): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(AUTH_ERROR_EVENT, { detail: { message } }));
+}
+
 export type CompanyDto = {
   id: number;
   run_id?: number | null;
@@ -41,15 +74,39 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
+  if (!isProtectedRoute(config.url)) {
+    return config;
+  }
+
   const session = await getSession();
   const token = session?.accessToken;
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!token) {
+    throw new AuthError();
   }
+
+  config.headers.Authorization = `Bearer ${token}`;
 
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (isAuthError(error)) {
+      broadcastAuthError(error.message);
+      return Promise.reject(error);
+    }
+
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const authError = new AuthError();
+      broadcastAuthError(authError.message);
+      return Promise.reject(authError);
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export async function getCompanies(params?: { q?: string; runId?: number }): Promise<CompanyDto[]> {
   const response = await apiClient.get<CompanyDto[]>('/api/companies', {
