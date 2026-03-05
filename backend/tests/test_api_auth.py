@@ -19,11 +19,12 @@ def test_auth_rejects_short_password(client) -> None:
     assert response.status_code == 401
 
 
-def test_register_creates_local_user_and_returns_auth_payload(client) -> None:
+def test_register_creates_local_user_and_allows_login(client) -> None:
     response = client.post(
         "/api/auth/register",
         json={
             "email": "new-user@example.com",
+            "username": "new-user",
             "password": "secret123",
             "name": "New User",
         },
@@ -33,12 +34,14 @@ def test_register_creates_local_user_and_returns_auth_payload(client) -> None:
     payload = response.json()
     assert payload["token"]
     assert payload["user"]["email"] == "new-user@example.com"
+    assert payload["user"]["name"] == "New User"
 
     login = client.post(
         "/api/auth/login",
-        json={"username": "new-user@example.com", "password": "secret123"},
+        json={"username": "new-user", "password": "secret123"},
     )
     assert login.status_code == 200
+    assert login.json()["token"]
 
 
 def test_register_rejects_short_password(client) -> None:
@@ -54,16 +57,28 @@ def test_register_rejects_short_password(client) -> None:
     assert "at least 8 characters" in response.json()["detail"]
 
 
-def test_register_conflict_on_existing_email(client) -> None:
-    response = client.post(
+def test_register_rejects_duplicate_email(client) -> None:
+    email_conflict = client.post(
         "/api/auth/register",
         json={
             "email": "user@example.com",
+            "username": "fresh-username",
             "password": "secret123",
         },
     )
+    assert email_conflict.status_code == 409
+    assert "email" in email_conflict.json()["detail"].lower()
 
-    assert response.status_code == 409
+    username_conflict = client.post(
+        "/api/auth/register",
+        json={
+            "email": "brand-new@example.com",
+            "username": "tester@example.com",
+            "password": "secret123",
+        },
+    )
+    assert username_conflict.status_code == 409
+    assert "username" in username_conflict.json()["detail"].lower()
 
 
 def test_protected_route_requires_bearer(client) -> None:

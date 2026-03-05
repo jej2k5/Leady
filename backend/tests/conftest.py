@@ -63,5 +63,5 @@ def auth_headers(client) -> dict[str, str]:
         "/api/auth/login",
         json={"username": "tester@example.com", "password": "secret123"},
     )
-    token = response.json()["access_token"]
+    token = response.json()["token"]
     return {"Authorization": f"Bearer {token}"}
