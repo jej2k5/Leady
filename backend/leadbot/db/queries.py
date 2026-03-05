@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import UTC, datetime
 
@@ -94,6 +95,20 @@ SCHEMA_STATEMENTS = (
         UNIQUE(company_id, contact_type, contact_value)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS discovery_candidates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_name TEXT NOT NULL,
+        domain TEXT,
+        source_type TEXT NOT NULL,
+        source_url TEXT,
+        evidence_json TEXT NOT NULL DEFAULT '[]',
+        first_seen_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        score REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'unseeded'
+    )
+    """,
 )
 
 INDEX_STATEMENTS = (
@@ -103,6 +118,8 @@ INDEX_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_sources_company_id ON sources(company_id)",
     "CREATE INDEX IF NOT EXISTS idx_signals_company_id ON signals(company_id)",
     "CREATE INDEX IF NOT EXISTS idx_contacts_company_id ON contacts(company_id)",
+    "CREATE INDEX IF NOT EXISTS idx_discovery_candidates_status_score ON discovery_candidates(status, score DESC, last_seen_at DESC)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_discovery_candidates_identity ON discovery_candidates(COALESCE(NULLIF(lower(trim(domain)), ''), NULLIF(lower(trim(company_name)), '')))",
 )
 
 
@@ -584,6 +601,186 @@ def search_contacts(conn: sqlite3.Connection, query: str) -> list[Contact]:
         (like, like, like),
     ).fetchall()
     return [_row_to_contact(row) for row in rows]
+
+
+
+def _normalize_company_name(name: str | None) -> str | None:
+    if name is None:
+        return None
+    normalized = re.sub(r"\s+", " ", name.strip().lower())
+    return normalized or None
+
+
+def _normalize_candidate_identity(company_name: str, domain: str | None) -> tuple[str, str | None, str]:
+    from ..utils.dedup import normalize_domain
+
+    normalized_name = _normalize_company_name(company_name)
+    if not normalized_name:
+        raise ValueError("company_name is required")
+    normalized_domain = normalize_domain(domain)
+    dedupe_key = normalized_domain or normalized_name
+    return normalized_name, normalized_domain, dedupe_key
+
+
+def upsert_discovery_candidate(
+    conn: sqlite3.Connection,
+    *,
+    company_name: str,
+    domain: str | None,
+    source_type: str,
+    source_url: str | None = None,
+    evidence: dict[str, object] | None = None,
+    score: float = 0.0,
+    status: str = "unseeded",
+) -> dict[str, object]:
+    normalized_name, normalized_domain, dedupe_key = _normalize_candidate_identity(company_name, domain)
+    now = utcnow()
+    row = conn.execute(
+        """
+        SELECT *
+        FROM discovery_candidates
+        WHERE COALESCE(NULLIF(lower(trim(domain)), ''), NULLIF(lower(trim(company_name)), '')) = ?
+        """,
+        (dedupe_key,),
+    ).fetchone()
+
+    evidence_entries: list[dict[str, object]] = []
+    if row is not None:
+        existing = json.loads(row["evidence_json"] or "[]")
+        if isinstance(existing, list):
+            evidence_entries = [item for item in existing if isinstance(item, dict)]
+
+    incoming_evidence = {
+        "source_type": source_type,
+        "source_url": source_url,
+        "payload": evidence or {},
+        "seen_at": now,
+    }
+    signature = (source_type, source_url, json.dumps(evidence or {}, sort_keys=True))
+    seen_signatures = {
+        (
+            str(item.get("source_type") or ""),
+            str(item.get("source_url") or "") or None,
+            json.dumps(item.get("payload") or {}, sort_keys=True),
+        )
+        for item in evidence_entries
+    }
+    if signature not in seen_signatures:
+        evidence_entries.append(incoming_evidence)
+
+    if row is None:
+        conn.execute(
+            """
+            INSERT INTO discovery_candidates (
+                company_name, domain, source_type, source_url, evidence_json, first_seen_at, last_seen_at, score, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                company_name.strip(),
+                normalized_domain,
+                source_type,
+                source_url,
+                json.dumps(evidence_entries),
+                now,
+                now,
+                score,
+                status,
+            ),
+        )
+    else:
+        next_status = row["status"] if row["status"] == "seeded" else status
+        conn.execute(
+            """
+            UPDATE discovery_candidates
+            SET company_name = ?,
+                domain = COALESCE(?, domain),
+                source_type = ?,
+                source_url = COALESCE(?, source_url),
+                evidence_json = ?,
+                last_seen_at = ?,
+                score = MAX(score, ?),
+                status = ?
+            WHERE id = ?
+            """,
+            (
+                company_name.strip(),
+                normalized_domain,
+                source_type,
+                source_url,
+                json.dumps(evidence_entries),
+                now,
+                score,
+                next_status,
+                row["id"],
+            ),
+        )
+    conn.commit()
+
+    result = conn.execute(
+        """
+        SELECT *
+        FROM discovery_candidates
+        WHERE COALESCE(NULLIF(lower(trim(domain)), ''), NULLIF(lower(trim(company_name)), '')) = ?
+        """,
+        (dedupe_key,),
+    ).fetchone()
+    assert result is not None
+    payload = dict(result)
+    payload["evidence"] = json.loads(payload.pop("evidence_json") or "[]")
+    return payload
+
+
+def list_discovery_candidates(
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = None,
+    source_type: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, object]]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+    if source_type:
+        clauses.append("source_type = ?")
+        params.append(source_type)
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    limit_sql = ""
+    if limit is not None and limit > 0:
+        limit_sql = " LIMIT ?"
+        params.append(limit)
+
+    rows = conn.execute(
+        f"""
+        SELECT *
+        FROM discovery_candidates
+        {where_sql}
+        ORDER BY score DESC, last_seen_at DESC, id DESC
+        {limit_sql}
+        """,
+        params,
+    ).fetchall()
+    results: list[dict[str, object]] = []
+    for row in rows:
+        payload = dict(row)
+        payload["evidence"] = json.loads(payload.pop("evidence_json") or "[]")
+        results.append(payload)
+    return results
+
+
+def mark_discovery_candidate_seeded(conn: sqlite3.Connection, candidate_id: int) -> None:
+    conn.execute(
+        """
+        UPDATE discovery_candidates
+        SET status = 'seeded',
+            last_seen_at = ?
+        WHERE id = ?
+        """,
+        (utcnow(), candidate_id),
+    )
+    conn.commit()
 
 
 def persist_raw_candidate(conn: sqlite3.Connection, run_id: int, candidate: RawCandidate) -> Company:

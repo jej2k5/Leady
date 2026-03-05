@@ -7,6 +7,7 @@ from typing import Any
 from ..db.models import Company, RawCandidate, RunStatus, SourceType
 from ..db.queries import list_companies, persist_raw_candidate, update_run_status, upsert_company
 from ..db.session import get_connection
+from ..discovery.orchestrator import emit_top_unseeded_source_seed_data
 from ..enrichment.pipeline import enrich_candidate
 from ..exports.csv_export import build_outreach_queue_csv
 from ..scoring.engine import evaluate_candidate
@@ -39,6 +40,10 @@ def parse_sources(sources: str) -> list[str]:
 
 
 def default_source_seed_data(days: int) -> SourceSeedData:
+    seeded = emit_top_unseeded_source_seed_data(limit_per_source=max(1, days))
+    if any(seeded.values()):
+        return seeded
+
     since = (datetime.now(tz=UTC) - timedelta(days=days)).date().isoformat()
     return {
         "funding": [
