@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { getProviders, signIn } from 'next-auth/react';
 
 import { GoogleButton } from './GoogleButton';
+import { useSearchParams } from 'next/navigation';
+import { AUTH_ERROR_MESSAGE } from '@/lib/api';
 
 export function LoginForm() {
-  //const searchParams = useSearchParams();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
