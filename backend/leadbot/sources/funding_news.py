@@ -23,7 +23,7 @@ def build_funding_candidate(company_name: str, article_url: str, article_text: s
                 confidence=0.75,
             )
         ],
-        metadata={"keywords": ",".join(keywords), "source": "funding_news"},
+        metadata={"keywords": ",".join(keywords), "source": "funding_news", "funding_text": article_text},
     )
 
 

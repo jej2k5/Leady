@@ -118,6 +118,7 @@ def run_pipeline_for_run(
         with get_connection() as conn:
             for company, candidate in zip(persisted, enriched, strict=False):
                 evaluation = evaluate_candidate(candidate)
+                merged_metadata = {**company.metadata, **candidate.metadata, **evaluation}
                 upsert_company(
                     conn,
                     Company(
@@ -128,7 +129,7 @@ def run_pipeline_for_run(
                         employee_count=company.employee_count,
                         location=company.location,
                         score=float(evaluation["score"]),
-                        metadata={**company.metadata, **candidate.metadata, **evaluation},
+                        metadata=merged_metadata,
                     ),
                 )
             update_run_status(conn, run_id, RunStatus.completed)
