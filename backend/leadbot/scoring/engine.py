@@ -6,6 +6,7 @@ from ..db.models import RawCandidate
 from .categorizer import categorize_candidate
 from .classifier import classify_candidate
 from .scorer import score_candidate
+from .stage import infer_stage
 
 
 def evaluate_candidate(candidate: RawCandidate) -> dict[str, str | float]:
@@ -13,5 +14,6 @@ def evaluate_candidate(candidate: RawCandidate) -> dict[str, str | float]:
     return {
         "classification": classify_candidate(candidate),
         "category": categorize_candidate(candidate),
+        "stage": infer_stage(candidate),
         "score": score_candidate(candidate),
     }
