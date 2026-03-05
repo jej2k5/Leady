@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 import inspect
+import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ValidationError
 import requests
 
 from ...db import queries
@@ -116,11 +117,9 @@ async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
     email = str(payload.email).strip().lower() if payload.email else ""
     username = (payload.username or "").strip().lower()
 
-    if not email and not username:
-        raise HTTPException(status_code=422, detail="Either email or username is required")
-
     if not email:
-        email = username
+        raise HTTPException(status_code=422, detail="Email is required")
+
     if not username:
         username = email
 
@@ -132,17 +131,27 @@ async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
         if queries.get_user_by_username(conn, email):
             raise HTTPException(status_code=409, detail="A user with that email already exists")
 
-        created_user = queries.create_user(
-            conn,
-            User(
-                username=username,
-                email=email,
-                name=payload.name,
-                password_hash=hash_password(payload.password),
-                provider="local",
-                role="viewer",
-            ),
-        )
+        try:
+            created_user = queries.create_user(
+                conn,
+                User(
+                    username=username,
+                    email=email,
+                    name=payload.name,
+                    password_hash=hash_password(payload.password),
+                    provider="local",
+                    role="viewer",
+                ),
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail="Invalid registration payload") from exc
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="A user with that email or username already exists",
+            ) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail="Unable to register user") from exc
 
     try:
         result = await _authenticate(
