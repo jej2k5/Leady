@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 import inspect
 import logging
 import sqlite3
@@ -84,11 +84,36 @@ def _validate_google_identity(payload: GoogleExchangeRequest) -> dict[str, Any]:
     }
 
 
+def _normalize_auth_result(result: Any) -> dict[str, Any]:
+    if isinstance(result, Mapping):
+        return dict(result)
+
+    model_dump = getattr(result, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump()
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+
+    legacy_dict = getattr(result, "dict", None)
+    if callable(legacy_dict):
+        dumped = legacy_dict()
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+
+    token = getattr(result, "token", None)
+    user = getattr(result, "user", None)
+    if token is not None or user is not None:
+        normalized: dict[str, Any] = {"token": token, "user": user}
+        return normalized
+
+    raise TypeError(f"Unsupported auth result type: {type(result).__name__}")
+
+
 async def _authenticate(provider: str, data: dict[str, Any]) -> dict[str, Any]:
     result = auth_manager.authenticate(provider, data)
     if inspect.isawaitable(result):
         result = await result
-    return dict(result)
+    return _normalize_auth_result(result)
 
 
 def _validate_local_password_policy(password: str) -> None:
