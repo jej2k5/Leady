@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import io
+import importlib
+import importlib.util
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -302,7 +304,11 @@ def serve(
     port: int = typer.Option(None, "--port", help="Bind port"),
 ) -> None:
     """Start API server (includes MCP mount in same process)."""
-    import uvicorn
+    if importlib.util.find_spec("uvicorn") is None:
+        raise typer.BadParameter(
+            "Missing dependency: uvicorn. Install backend dependencies (e.g. `pip install -e .` in backend)."
+        )
+    uvicorn = importlib.import_module("uvicorn")
 
     settings = get_settings()
     uvicorn.run(api_app, host=host or settings.api.host, port=port or settings.api.port)
