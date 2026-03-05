@@ -150,8 +150,8 @@ async def register(payload: LocalRegisterRequest) -> dict[str, Any]:
                 status_code=409,
                 detail="A user with that email or username already exists",
             ) from exc
-        # except Exception as exc:  # noqa: BLE001
-        #    raise HTTPException(status_code=500, detail=f"Unable to register user {exc}") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=f"Unable to register user {exc}") from exc
 
     try:
         result = await _authenticate(
